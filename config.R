@@ -8,7 +8,7 @@ CONFIG <- list(
     use_sample_data = FALSE,      # Set to FALSE to use real data
     url = "https://zuriteapi.com/homers/api/homeruns/?format=json&year=2025",
     season = "2025",              # Current season
-    poll_interval_ms = 60000      # Poll every minute
+    poll_interval_ms = 300000      # Poll every minute
   ),
   
   # Team Settings
@@ -16,36 +16,50 @@ CONFIG <- list(
     # Team names and colors
     team_info = list(
       "Derek" = list(
+        display_name = "Derek",
+        squad_name = '',
         primary_color = "#CFB87C",    # University of Colorado Boulder Gold
         highlight_color = "#E6C085",  # Brighter version for graphs
         text_color = "black"
       ),
-      "Jackson" = list(
+      "Matt" = list(
+        display_name = "Matt",
+        squad_name = '',
         primary_color = "#005A9C",    # Dodger Blue
         highlight_color = "#005A9C",  # Brighter version for graphs
         text_color = "white"        # Light color for contrast
       ),
       "Tyler" = list(
+        display_name = "Tyler",
+        squad_name = '',
         primary_color = "#4b2e83",    # University of Washington Purple
         highlight_color = "#5A3E9B",  # Brighter version for graphs
         text_color = "#ffc700"        # Light color for contrast
       ),
       "Jason" = list(
+        display_name = "Jason",
+        squad_name = '',
         primary_color = "#73000A",    # University of South Carolina Red
         highlight_color = "#8B0000",  # Brighter version for graphs
         text_color = "white"
       ),
       "Jared" = list(
+        display_name = "Jared",
+        squad_name = '',
         primary_color = "#007030", 
         highlight_color = "#154733",
         text_color = "#FEE123"
       ),
       "Brusick" = list(
+        display_name = "Brusick",
+        squad_name = '',
         primary_color = "#ffce30", 
         highlight_color = "#ffce30",
         text_color = "black"
       ),
       "Maddox" = list(
+        display_name = "Maddox",
+        squad_name = '',
         primary_color = "black",
         highlight_color = "#f5182f",
         text_color = "#f5182f"
@@ -77,6 +91,32 @@ get_team_colors <- function(for_graph = FALSE) {
     colors <- sapply(team_names, function(team) CONFIG$teams$team_info[[team]]$primary_color)
     return(as.list(colors))
   }
+}
+
+# NEW: Get display names for the main leaderboard
+get_team_display_names <- function() {
+  team_names <- get_team_names()
+  display_names <- sapply(team_names, function(team) {
+    display_name <- CONFIG$teams$team_info[[team]]$display_name
+    if (is.null(display_name)) {
+      return(team)  # Fallback to original name
+    }
+    return(display_name)
+  })
+  return(as.list(display_names))
+}
+
+# NEW: Get squad names for individual standings
+get_team_squad_names <- function() {
+  team_names <- get_team_names()
+  squad_names <- sapply(team_names, function(team) {
+    squad_name <- CONFIG$teams$team_info[[team]]$squad_name
+    if (is.null(squad_name)) {
+      return(team)  # Fallback to original name
+    }
+    return(squad_name)
+  })
+  return(as.list(squad_names))
 }
 
 # Calculate HR distances by team

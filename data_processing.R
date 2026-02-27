@@ -118,6 +118,11 @@ process_data <- function(raw_data, roster) {
     return(NULL)
   }
   
+  if ("batter" %in% colnames(raw_data)) {
+    raw_data <- raw_data %>%
+      filter(!(batter_name == "Max Muncy" & batter == "691777"))
+  }
+  
   # Check that we have the expected columns in the API response
   expected_columns <- c("batter_name", "date")
   missing_columns <- expected_columns[!expected_columns %in% colnames(raw_data)]
@@ -201,51 +206,6 @@ calculate_total_hr_per_player <- function(data) {
   return(all_players)
 }
 
-# # LEADERBOARD FOR top five, team total, and total distance
-# create_leaderboard <- function(player_totals, hr_data = NULL) {
-#   if (is.null(player_totals) || nrow(player_totals) == 0) {
-#     return(NULL)
-#   }
-#   
-#   # Get number of counting players from config
-#   counting_players <- get_counting_players()
-#   
-#   # Calculate team totals based on top N players
-#   team_totals <- player_totals %>%
-#     group_by(team_name) %>%
-#     mutate(rank = row_number()) %>%
-#     summarise(
-#       top_n_total = sum(total_home_runs[rank <= counting_players]),
-#       all_players_total = sum(total_home_runs),
-#       .groups = "drop"
-#     )
-#   
-#   # Add distance data if available
-#   if (!is.null(hr_data) && "hit_distance" %in% colnames(hr_data)) {
-#     # Make sure hit_distance is numeric
-#     hr_data$hit_distance <- as.numeric(as.character(hr_data$hit_distance))
-#     
-#     # Calculate total distance by team
-#     distance_data <- hr_data %>%
-#       filter(!is.na(hit_distance)) %>%
-#       group_by(team_name) %>%
-#       summarise(
-#         total_distance = sum(hit_distance, na.rm = TRUE),
-#         .groups = "drop"
-#       )
-#     
-#     # Join with team totals
-#     team_totals <- left_join(team_totals, distance_data, by = "team_name") %>%
-#       mutate(
-#         total_distance = ifelse(is.na(total_distance), 0, total_distance)
-#       )
-#   }
-#   
-#   return(list(
-#     leaderboard = team_totals,
-#     counting_players = counting_players
-#   ))
-# }
 
 # Create the leaderboard with top N players counting
 create_leaderboard <- function(player_totals, hr_data = NULL) {
@@ -295,7 +255,7 @@ create_leaderboard <- function(player_totals, hr_data = NULL) {
   ))
 }
 
-# Prepare data for cumulative graph
+# Updated prepare_cumulative_data function to ensure it counts only top 5 players correctly
 prepare_cumulative_data <- function(data) {
   if (is.null(data) || nrow(data) == 0) {
     return(NULL)
@@ -305,27 +265,50 @@ prepare_cumulative_data <- function(data) {
   counting_players <- get_counting_players()
   opening_day <- get_opening_day()
   
-  # Calculate cumulative home runs over time for top N players
+  # First, calculate total HRs by player to determine rankings
+  player_totals <- data %>%
+    group_by(team_name, player_name) %>%
+    summarise(total_hr = n(), .groups = "drop") %>%
+    group_by(team_name) %>%
+    # Rank players within each team by total HRs (descending)
+    arrange(desc(total_hr)) %>%
+    mutate(player_rank = row_number()) %>%
+    ungroup()
+  
+  # Get only the top N players for each team
+  top_players <- player_totals %>%
+    filter(player_rank <= counting_players) %>%
+    select(team_name, player_name, player_rank)
+  
+  # Now calculate cumulative data only for these top players
   cumulative_data <- data %>%
     mutate(date = as.Date(date)) %>%
     # Filter for dates on or after opening day
     filter(date >= opening_day) %>%
-    # Get total HRs by player to determine top N
-    group_by(team_name, player_name) %>%
-    mutate(player_total_hr = n()) %>%
-    ungroup() %>%
-    # Rank players within teams
-    group_by(team_name) %>%
-    mutate(player_rank = dense_rank(desc(player_total_hr))) %>%
-    # Keep only top N players
-    filter(player_rank <= counting_players) %>%
-    # Get daily and cumulative counts
+    # Join with top players to filter data to only top N players
+    inner_join(top_players, by = c("team_name", "player_name")) %>%
+    # Get daily counts by team (sum of all top N players' HRs per day)
     group_by(team_name, date) %>%
     summarise(daily_hr = n(), .groups = "drop") %>%
+    # Calculate cumulative totals
     arrange(team_name, date) %>%
     group_by(team_name) %>%
     mutate(cumulative_hr = cumsum(daily_hr)) %>%
     ungroup()
+  
+  # Debug output to verify the function is working correctly
+  if (nrow(cumulative_data) > 0) {
+    message("Cumulative data prepared:")
+    message(paste("- Date range:", min(cumulative_data$date), "to", max(cumulative_data$date)))
+    message(paste("- Teams included:", paste(unique(cumulative_data$team_name), collapse = ", ")))
+    latest_totals <- cumulative_data %>%
+      group_by(team_name) %>%
+      summarise(latest_total = max(cumulative_hr), .groups = "drop")
+    message("- Latest cumulative totals by team:")
+    for(i in 1:nrow(latest_totals)) {
+      message(paste("  ", latest_totals$team_name[i], ":", latest_totals$latest_total[i]))
+    }
+  }
   
   return(cumulative_data)
 }
@@ -343,7 +326,7 @@ generate_sample_hr_data <- function() {
       ),
       team_name = c(
         "Derek", "Derek", "Derek", "Derek",
-        "Jackson", "Jackson", "Jackson",
+        "Matt", "Matt", "Matt",
         "Tyler", "Tyler", "Tyler"
       ),
       stringsAsFactors = FALSE
@@ -400,4 +383,166 @@ generate_sample_hr_data <- function() {
   sample_data <- sample_data[order(sample_data$date), ]
   
   return(sample_data)
+}
+
+# Calculate recent HR stats including longest HR and player name
+# Updated calculate_recent_hr_stats function with average distance calculation
+calculate_recent_hr_stats <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  
+  today <- Sys.Date() - 1
+  week_ago <- today - 7
+  
+  # Calculate today's HRs by team
+  today_hrs <- data %>%
+    filter(date >= today) %>%
+    group_by(team_name) %>%
+    summarise(today_hr = n(), .groups = "drop")
+  
+  # Calculate past 7 days HRs by team
+  past7_hrs <- data %>%
+    filter(date >= week_ago) %>%
+    group_by(team_name) %>%
+    summarise(past7_hr = n(), .groups = "drop")
+  
+  # Calculate longest HR and average distance by team with player name
+  longest_hrs <- NULL
+  avg_distance <- NULL
+  
+  if ("hit_distance" %in% colnames(data)) {
+    # Make sure hit_distance is numeric
+    data$hit_distance <- as.numeric(as.character(data$hit_distance))
+    
+    # For each team, find the HR with the maximum distance
+    longest_by_team <- data %>%
+      filter(!is.na(hit_distance)) %>%
+      group_by(team_name) %>%
+      mutate(max_dist = max(hit_distance, na.rm = TRUE)) %>%
+      filter(hit_distance == max_dist) %>%
+      # If multiple HRs with same distance, take the most recent one
+      arrange(desc(date)) %>%
+      slice(1) %>%
+      select(team_name, player_name, hit_distance)
+    
+    # Extract last name from player name
+    longest_by_team <- longest_by_team %>%
+      mutate(
+        last_name = sapply(strsplit(player_name, "\\s+"), tail, 1),
+        longest_hr = hit_distance
+      ) %>%
+      select(team_name, longest_hr, last_name)
+    
+    # Calculate average distance by team (for ALL players on the team)
+    avg_distance <- data %>%
+      filter(!is.na(hit_distance)) %>%
+      group_by(team_name) %>%
+      summarise(
+        avg_distance = round(mean(hit_distance, na.rm = TRUE), 1),
+        hr_count_with_distance = n(),
+        .groups = "drop"
+      )
+    
+    longest_hrs <- longest_by_team
+  }
+  
+  # Start with a base dataframe with all team names
+  team_names <- unique(data$team_name)
+  result <- data.frame(team_name = team_names)
+  
+  # Join with today's HRs
+  if (!is.null(today_hrs) && nrow(today_hrs) > 0) {
+    result <- left_join(result, today_hrs, by = "team_name")
+  } else {
+    result$today_hr <- 0
+  }
+  
+  # Join with past 7 days HRs
+  if (!is.null(past7_hrs) && nrow(past7_hrs) > 0) {
+    result <- left_join(result, past7_hrs, by = "team_name")
+  } else {
+    result$past7_hr <- 0
+  }
+  
+  # Join with longest HRs
+  if (!is.null(longest_hrs) && nrow(longest_hrs) > 0) {
+    result <- left_join(result, longest_hrs, by = "team_name")
+  } else {
+    result$longest_hr <- 0
+    result$last_name <- ""
+  }
+  
+  # Join with average distance
+  if (!is.null(avg_distance) && nrow(avg_distance) > 0) {
+    result <- left_join(result, avg_distance, by = "team_name")
+  } else {
+    result$avg_distance <- 0
+    result$hr_count_with_distance <- 0
+  }
+  
+  # Fill NA values
+  result <- result %>%
+    mutate(
+      today_hr = ifelse(is.na(today_hr), 0, today_hr),
+      past7_hr = ifelse(is.na(past7_hr), 0, past7_hr),
+      longest_hr = ifelse(is.na(longest_hr), 0, longest_hr),
+      last_name = ifelse(is.na(last_name), "", last_name),
+      avg_distance = ifelse(is.na(avg_distance), 0, avg_distance),
+      hr_count_with_distance = ifelse(is.na(hr_count_with_distance), 0, hr_count_with_distance)
+    )
+  
+  return(result)
+}
+
+
+calculate_player_recent_stats <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  
+  today <- Sys.Date() - 1
+  week_ago <- today - 7
+  
+  # Calculate today's HRs by player
+  today_hrs <- data %>%
+    filter(date >= today) %>%
+    group_by(team_name, player_name) %>%
+    summarise(today_hr = n(), .groups = "drop")
+  
+  # Calculate past 7 days HRs by player
+  past7_hrs <- data %>%
+    filter(date >= week_ago) %>%
+    group_by(team_name, player_name) %>%
+    summarise(past7_hr = n(), .groups = "drop")
+  
+  # Create a combined dataset
+  result <- NULL
+  
+  # Start with a base of all players
+  all_players <- unique(data[, c("team_name", "player_name")])
+  result <- all_players
+  
+  # Join with today's HRs
+  if (!is.null(today_hrs) && nrow(today_hrs) > 0) {
+    result <- left_join(result, today_hrs, by = c("team_name", "player_name"))
+  } else {
+    result$today_hr <- 0
+  }
+  
+  # Join with past 7 days HRs
+  if (!is.null(past7_hrs) && nrow(past7_hrs) > 0) {
+    result <- left_join(result, past7_hrs, by = c("team_name", "player_name"))
+  } else {
+    result$past7_hr <- 0
+  }
+  
+  # Fill NA values
+  result <- result %>%
+    mutate(
+      today_hr = ifelse(is.na(today_hr), 0, today_hr),
+      past7_hr = ifelse(is.na(past7_hr), 0, past7_hr)
+    )
+  
+  return(result)
 }

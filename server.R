@@ -101,108 +101,21 @@ server <- function(input, output, session) {
     create_leaderboard(total_hr_per_player(), hr_data())
   })
   
-  # Updated team_totals function with improved column sizing
-  
-  # # LEADERBOARD FOR Top 5, team total, and total HR distance. 
-  # output$team_totals <- renderDT({
-  #   if (is.null(leaderboard_data())) return(NULL)
-  #   
-  #   # Get colors from configuration
-  #   team_colors <- get_team_colors()
-  #   text_colors <- get_team_text_colors()
-  #   highlight_colors <- get_team_colors(for_graph = TRUE)
-  #   
-  #   # Check if we have distance data
-  #   has_distance <- "total_distance" %in% colnames(leaderboard_data()$leaderboard)
-  #   
-  #   # Prepare leaderboard data - SORT BY TOP 5 TOTAL
-  #   leaderboard <- leaderboard_data()$leaderboard %>%
-  #     arrange(desc(top_n_total))  # Sort by top_n_total descending
-  #   
-  #   # Add rank column based on top_n_total
-  #   leaderboard$Rank <- 1:nrow(leaderboard)
-  #   
-  #   # Rename columns and select what we need based on available data
-  #   if (has_distance) {
-  #     leaderboard <- leaderboard %>%
-  #       rename(
-  #         Team = team_name,
-  #         `TOP 5` = top_n_total,
-  #         Total = all_players_total,
-  #         `Total Distance (ft)` = total_distance
-  #       
-  #       ) %>%
-  #       select(Rank, Team, `TOP 5`, Total, `Total Distance (ft)`)
-  #   } else {
-  #     leaderboard <- leaderboard %>%
-  #       rename(
-  #         Team = team_name,
-  #         `TOP 5` = top_n_total,
-  #         Total = all_players_total
-  #       ) %>%
-  #       select(Rank, Team, `TOP 5`, Total)
-  #   }
-  #   
-  #   # Create the datatable with styling
-  #   dt <- datatable(
-  #     leaderboard, 
-  #     options = list(
-  #       dom = 't',  # Just show the table, no pagination or search
-  #       pageLength = -1,  # Show all rows
-  #       autoWidth = FALSE,  # We'll control widths with CSS
-  #       ordering = FALSE,  # Disable sorting
-  #       searching = FALSE,  # Disable search
-  #       paging = FALSE,     # Disable pagination
-  #       scrollX = FALSE     # Disable horizontal scrolling
-  #     ), 
-  #     rownames = FALSE, 
-  #     escape = FALSE
-  #   ) 
-  #   
-  #   # Apply team colors
-  #   dt <- dt %>% formatStyle(
-  #     columns = names(leaderboard),
-  #     backgroundColor = styleEqual(
-  #       leaderboard$Team, 
-  #       sapply(leaderboard$Team, function(team) team_colors[[team]])
-  #     ),
-  #     color = styleEqual(
-  #       leaderboard$Team, 
-  #       sapply(leaderboard$Team, function(team) text_colors[[team]])
-  #     ),
-  #     textAlign = 'center'
-  #   )
-  #   
-  #   # Highlight TOP 5 column with lighter team colors
-  #   dt <- dt %>% formatStyle(
-  #     columns = "TOP 5",
-  #     backgroundColor = styleEqual(
-  #       leaderboard$Team,
-  #       sapply(leaderboard$Team, function(team) {
-  #         # Get highlight color (already defined in config)
-  #         highlight_color <- highlight_colors[team]
-  #         return(highlight_color)
-  #       })
-  #     ),
-  #     fontWeight = 'bold',
-  #     fontSize = '120%'
-  #   )
-  #   
-  #   return(dt)
-  # })
-  
   # Updated team_totals function with TOP 5, Total Distance, and Avg Distance
   
+  # Modified team_totals output to use display names
+  # Modified team_totals output to use display names
   output$team_totals <- renderDT({
     if (is.null(leaderboard_data())) return(NULL)
     
-    # Get colors from configuration
+    # Get colors and display names from configuration
     team_colors <- get_team_colors()
     text_colors <- get_team_text_colors()
     highlight_colors <- get_team_colors(for_graph = TRUE)
+    display_names <- get_team_display_names()
     
-    # Check if we have distance data
-    has_distance <- "total_distance" %in% colnames(leaderboard_data()$leaderboard)
+    # Calculate recent statistics
+    recent_stats <- calculate_recent_hr_stats(hr_data())
     
     # Prepare leaderboard data - SORT BY TOP 5 TOTAL
     leaderboard <- leaderboard_data()$leaderboard %>%
@@ -211,26 +124,63 @@ server <- function(input, output, session) {
     # Add rank column based on top_n_total
     leaderboard$Rank <- 1:nrow(leaderboard)
     
-    # Rename columns and select what we need based on available data
-    if (has_distance) {
-      # Calculate average distance
+    # Join with recent stats
+    if (!is.null(recent_stats)) {
+      # Join with recent stats
       leaderboard <- leaderboard %>%
-        mutate(avg_distance = round(total_distance / all_players_total, 1)) %>%
-        rename(
-          Team = team_name,
-          `TOP 5` = top_n_total,
-          `Total Dinger Distance (ft)` = total_distance,
-          `Avg (ft)` = avg_distance
-        ) %>%
-        select(Rank, Team, `TOP 5`, `Total Dinger Distance (ft)`, `Avg (ft)`)
+        left_join(recent_stats, by = "team_name") %>%
+        mutate(
+          today_hr = ifelse(is.na(today_hr), 0, today_hr),
+          past7_hr = ifelse(is.na(past7_hr), 0, past7_hr),
+          longest_hr = ifelse(is.na(longest_hr), 0, round(as.numeric(longest_hr), 0)),
+          avg_distance = ifelse(is.na(avg_distance), 0, avg_distance),
+          last_name = ifelse(is.na(last_name), "", last_name)
+        )
     } else {
-      leaderboard <- leaderboard %>%
-        rename(
-          Team = team_name,
-          `TOP 5` = top_n_total
-        ) %>%
-        select(Rank, Team, `TOP 5`)
+      # If no recent stats, add empty columns
+      leaderboard$today_hr <- 0
+      leaderboard$past7_hr <- 0
+      leaderboard$longest_hr <- 0
+      leaderboard$last_name <- ""
+      leaderboard$avg_distance <- 0
     }
+    
+    # Format the distance column with average distance above longest HR
+    leaderboard <- leaderboard %>%
+      mutate(
+        formatted_distance = case_when(
+          # If we have both average and longest distance data
+          avg_distance > 0 & longest_hr > 0 & last_name != "" ~ 
+            paste0(avg_distance, " ft<br><small>(", last_name, "--", longest_hr, ")</small>"),
+          # If we only have longest HR data
+          longest_hr > 0 & last_name != "" ~ 
+            paste0("<br><small>(", last_name, " - ", longest_hr, " ft)</small>"),
+          # If we only have average distance
+          avg_distance > 0 ~ 
+            paste0("Avg: ", avg_distance, " ft"),
+          # Default case
+          TRUE ~ "No data"
+        )
+      )
+    
+    # Apply display names for the main leaderboard
+    leaderboard <- leaderboard %>%
+      mutate(
+        display_team_name = sapply(team_name, function(team) {
+          return(display_names[[team]])
+        })
+      )
+    
+    # Rename columns and select what we need
+    leaderboard <- leaderboard %>%
+      rename(
+        Team = display_team_name,  # Use display name instead of team_name
+        `TOP 5` = top_n_total,
+        `Avg Distance (Longest)` = formatted_distance,
+        `24 Hour` = today_hr,
+        `7 Days` = past7_hr
+      ) %>%
+      select(Rank, Team, `TOP 5`, `Avg Distance (Longest)`, `24 Hour`, `7 Days`)
     
     # Create the datatable with styling
     dt <- datatable(
@@ -245,19 +195,29 @@ server <- function(input, output, session) {
         scrollX = FALSE     # Disable horizontal scrolling
       ), 
       rownames = FALSE, 
-      escape = FALSE
+      escape = FALSE  # Important to allow HTML in the table
     ) 
     
-    # Apply team colors
+    # We need to map back to original team names for colors since they're keyed by original names
+    # Create a mapping from display names back to original team names
+    display_to_original <- setNames(names(display_names), unlist(display_names))
+    
+    # Apply team colors (mapping display names back to original for color lookup)
     dt <- dt %>% formatStyle(
       columns = names(leaderboard),
       backgroundColor = styleEqual(
         leaderboard$Team, 
-        sapply(leaderboard$Team, function(team) team_colors[[team]])
+        sapply(leaderboard$Team, function(display_team) {
+          original_team <- display_to_original[[display_team]]
+          return(team_colors[[original_team]])
+        })
       ),
       color = styleEqual(
         leaderboard$Team, 
-        sapply(leaderboard$Team, function(team) text_colors[[team]])
+        sapply(leaderboard$Team, function(display_team) {
+          original_team <- display_to_original[[display_team]]
+          return(text_colors[[original_team]])
+        })
       ),
       textAlign = 'center'
     )
@@ -267,9 +227,9 @@ server <- function(input, output, session) {
       columns = "TOP 5",
       backgroundColor = styleEqual(
         leaderboard$Team,
-        sapply(leaderboard$Team, function(team) {
-          # Get highlight color (already defined in config)
-          highlight_color <- highlight_colors[team]
+        sapply(leaderboard$Team, function(display_team) {
+          original_team <- display_to_original[[display_team]]
+          highlight_color <- highlight_colors[original_team]
           return(highlight_color)
         })
       ),
@@ -283,25 +243,53 @@ server <- function(input, output, session) {
   # Make sure the leaderboard is always rendered
   outputOptions(output, "team_totals", suspendWhenHidden = FALSE)
   
-  # Replace the createPlayerTable function in your server.R with this version:
-  
-  createPlayerTable <- function(team, team_data) {
+  # Modified createPlayerTable function to use squad names
+  createPlayerTable <- function(team, team_data, recent_player_data = NULL) {
     team_info <- CONFIG$teams$team_info[[team]]
     counting_players <- get_counting_players()
     bottom_display <- get_bottom_display_count()
+    squad_names <- get_team_squad_names()
     
     # Get text color from team config
     text_color <- team_info$text_color
     
-    # Create header
+    # Merge with recent player data if available
+    if (!is.null(recent_player_data)) {
+      # Filter for just this team's players
+      team_recent <- recent_player_data %>%
+        filter(team_name == team)
+      
+      # Join with team_data
+      if (nrow(team_recent) > 0) {
+        team_data <- left_join(
+          team_data, 
+          team_recent, 
+          by = c("team_name", "player_name")
+        ) %>%
+          mutate(
+            today_hr = ifelse(is.na(today_hr), 0, today_hr),
+            past7_hr = ifelse(is.na(past7_hr), 0, past7_hr)
+          )
+      } else {
+        team_data$today_hr <- 0
+        team_data$past7_hr <- 0
+      }
+    } else {
+      team_data$today_hr <- 0
+      team_data$past7_hr <- 0
+    }
+    
+    # Create header - make Rank smaller to accommodate more columns
     header <- tags$tr(
       style = paste0(
         "background-color:", team_info$primary_color, "; color:", 
         ifelse(team_info$text_color == "black", "black", "white"), ";"
       ),
-      tags$th("Rank"),
-      tags$th("Player Name"),
-      tags$th("HR")
+      tags$th("R", style = "width:8% !important;"),
+      tags$th("Player", style = "width:50% !important;"),
+      tags$th("TOTAL", style = "width:14% !important;"),
+      tags$th("24 Hour", style = "width:14% !important;"),
+      tags$th("7 Days", style = "width:14% !important;")
     )
     
     # Create rows
@@ -339,17 +327,21 @@ server <- function(input, output, session) {
       
       tags$tr(
         style = row_style,
-        tags$td(row$rank),
-        tags$td(style = name_style, row$player_name),
-        tags$td(row$total_home_runs)
+        tags$td(style = "text-align:center; padding: 4px 2px !important;", row$rank),
+        tags$td(style = paste0(name_style, " text-align:left; padding: 4px 2px !important;"), row$player_name),
+        tags$td(style = "text-align:center; padding: 4px 2px !important;", row$total_home_runs),
+        tags$td(style = "text-align:center; padding: 4px 2px !important;", row$today_hr),
+        tags$td(style = "text-align:center; padding: 4px 2px !important;", row$past7_hr)
       )
     })
     
-    # Create table
+    # Create table using squad name instead of team name
+    squad_name <- squad_names[[team]]
+    
     tags$div(
       class = "team-box",
       style = "margin-bottom: 20px;",
-      tags$h3(team),
+      tags$h3(squad_name),  # Use squad name here instead of team
       tags$table(
         class = "team-table",
         style = "border-collapse:collapse; width:100%; margin-bottom:15px;",
@@ -359,9 +351,7 @@ server <- function(input, output, session) {
     )
   }
   
-  # Updated version of the player_stats output function 
-  # This fixes the NA row issue by ensuring we have exact team data
-  
+  # Update the player_stats output
   output$player_stats <- renderUI({
     if (is.null(total_hr_per_player())) return(NULL)
     
@@ -369,6 +359,9 @@ server <- function(input, output, session) {
     leaderboard_order <- leaderboard_data()$leaderboard %>%
       arrange(desc(top_n_total)) %>%
       pull(team_name)
+    
+    # Calculate recent stats for players
+    recent_player_stats <- calculate_player_recent_stats(hr_data())
     
     counting_players <- get_counting_players()
     
@@ -397,18 +390,19 @@ server <- function(input, output, session) {
         player_name = c(paste0("Top ", counting_players, " Total"), "Team Total"),
         total_home_runs = c(top_n_total, all_total),
         team_name = c(team, team),
+        today_hr = c(0, 0),  # Add these columns to match
+        past7_hr = c(0, 0),  # Add these columns to match
         stringsAsFactors = FALSE
       )
       
       # Combine player data with total rows - explicitly use only necessary columns
-      # This prevents the extra NA row from appearing
       combined_data <- rbind(
         team_data[, c("rank", "player_name", "total_home_runs", "team_name")],
         total_rows[, c("rank", "player_name", "total_home_runs", "team_name")]
       )
       
       # Create the table
-      createPlayerTable(team, combined_data)
+      createPlayerTable(team, combined_data, recent_player_stats)
     })
     
     # Arrange in a responsive grid
@@ -417,7 +411,6 @@ server <- function(input, output, session) {
       team_tables
     )
   })
-  
   # Prepare data for cumulative HR graph
   cumulative_hr_data <- reactive({
     if (is.null(hr_data())) return(NULL)
@@ -450,9 +443,9 @@ server <- function(input, output, session) {
     ) +
       geom_line(size = 1.5) +
       labs(
-        title = paste0("Cumulative Top ", get_counting_players(), " Home Runs by Team (Since Opening Day)"),
+        title = paste0("Cumulative Top ", get_counting_players(), " Home Runs by Team"),
         x = "Date", 
-        y = "Cumulative Home Runs"
+        y = "Total Home Runs (Top 5)"
       ) +
       scale_color_manual(values = team_colors) +
       scale_x_date(limits = c(opening_day, NA)) +  # Start x-axis at opening day

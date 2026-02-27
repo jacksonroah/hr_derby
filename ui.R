@@ -9,6 +9,8 @@ source("config.R")
 ui <- fluidPage(
   # CSS Styling
   tags$head(
+    tags$meta(name = "viewport", content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"),
+    tags$meta(name = "apple-mobile-web-app-capable", content = "yes"),
     tags$style(HTML("
       /* Global styles */
       body {
@@ -29,6 +31,10 @@ ui <- fluidPage(
         margin-top: 25px;
       }
       
+      h6 {
+        text-align: center;
+      }
+      
       /* Leaderboard styling */
       .leaderboard-container {
         width: 100%;
@@ -46,36 +52,68 @@ ui <- fluidPage(
         margin: 0 auto;
       }
       
-      
-      /* Column widths for main leaderboard */
+      /* Main leaderboard column widths */
       .dataTable th:nth-child(1), /* Rank */
       .dataTable td:nth-child(1) {
-        width: 40px !important;
+        width: 30px !important;
         text-align: center !important;
+        padding: 8px 2px !important;
+      }
+      
+      .dataTable td:nth-child(1) {
+        font-size: 20px !important; /* Rank values larger */
       }
       
       .dataTable th:nth-child(2), /* Team */
       .dataTable td:nth-child(2) {
-        width: 80px !important;
+        width: 90px !important;
         text-align: center !important;
+        font-size: 22px !important;
+        font-weight: bold !important;
       }
       
-      .dataTable th:nth-child(3), /* TOP 5 */
-      .dataTable td:nth-child(3) {
-        width: 60px !important;
+      /* Make sure the TOP 5 heading text is centered */
+      .dataTable th:nth-child(3) {
         text-align: center !important;
+        font-size: 16px !important;
+        font-weight: bold !important;
+        padding: 8px 2px !important;
+        width: 50px !important;
+        border-right: 2px solid black !important;
       }
       
-      .dataTable th:nth-child(4), /* Total */
+      .dataTable td:nth-child(3) { /* TOP 5 values */
+        width: 50px !important;
+        text-align: center !important;
+        border-right: 2px solid black !important;
+        font-size: 20px !important; /* Slightly reduced but still larger */
+      }
+      
+      .dataTable th:nth-child(4), /* Longest */
       .dataTable td:nth-child(4) {
-        width: 60px !important;
+        width: 90px !important;
         text-align: center !important;
       }
       
-      .dataTable th:nth-child(5), /* Distance */
+      .dataTable th:nth-child(5), /* Today */
       .dataTable td:nth-child(5) {
-        width: 80px !important;
+        width: 50px !important;
         text-align: center !important;
+        font-size: 25px;
+      }
+      
+      .dataTable th:nth-child(6), /* Past 7 */
+      .dataTable td:nth-child(6) {
+        width: 50px !important;
+        text-align: center !important;
+      }
+      
+      /* Other headers (ensure all headers are centered) */
+      .dataTable th {
+        text-align: center !important;
+        font-size: 16px !important;
+        font-weight: bold !important;
+        padding: 8px 2px !important;
       }
       
       /* Team grid layout */
@@ -99,10 +137,11 @@ ui <- fluidPage(
       .team-box h3 {
         text-align: center;
         margin-top: 0;
-        margin-bottom: 10px;
-        padding-bottom: 5px;
+        margin-bottom: 15px;
+        padding-bottom: 8px;
         border-bottom: 1px solid #eee;
-        font-size: 18px;
+        font-size: 24px !important;
+        font-weight: bold !important;
       }
       
       /* Team table styling */
@@ -113,29 +152,75 @@ ui <- fluidPage(
       
       .team-table th, 
       .team-table td {
-        padding: 8px;
-        text-align: center !important;
         border: 1px solid #ddd;
+        text-align: center !important;
       }
       
-      .team-table th {
-        font-weight: bold;
-      }
-      
-      /* Team table column widths */
+      /* Team table column widths - UPDATED */
       .team-table th:nth-child(1), 
       .team-table td:nth-child(1) {
-        width: 20%;
+        width: 6% !important;
+        padding: 4px 2px !important;
       }
       
-      .team-table th:nth-child(2), 
+      .team-table td:nth-child(1) {
+        font-size: 17px !important; /* Rank values larger */
+      }
+      
+      /* Player column styling */
+      .team-table th:nth-child(2) {
+        width: 45% !important;
+        padding: 4px 2px !important;
+        text-align: center !important;
+        font-size: 17px !important; /* Player header larger */
+      }
+      
       .team-table td:nth-child(2) {
-        width: 55%;
+        width: 45% !important;
+        padding: 4px 2px !important;
+        text-align: center !important;
+        font-size: 16px !important; /* Player names larger */
       }
       
       .team-table th:nth-child(3), 
       .team-table td:nth-child(3) {
-        width: 25%;
+        width: 15% !important;
+        padding: 4px 2px !important;
+        border-right: 2px solid black !important;
+      }
+      
+      .team-table th:nth-child(4), 
+      .team-table td:nth-child(4) {
+        width: 14% !important;
+        padding: 4px 2px !important;
+      }
+      
+      .team-table th:nth-child(5), 
+      .team-table td:nth-child(5) {
+        width: 20% !important;
+        padding: 4px 2px !important;
+      }
+      
+      /* Make the total HR values bold in team tables */
+      .team-table tr:nth-last-child(-n+2) td:nth-child(3) {
+        font-weight: bold !important;
+      }
+      
+      /* Font sizes */
+      .dataTable td {
+        font-size: 18px !important;
+        padding: 10px 8px !important;
+      }
+      
+      .team-table th {
+        font-size: 16px !important;
+        font-weight: bold !important;
+        padding: 4px 2px !important;
+      }
+      
+      .team-table td {
+        font-size: 15px !important;
+        padding: 4px 2px !important;
       }
       
       /* Graph container */
@@ -149,74 +234,49 @@ ui <- fluidPage(
         .team-grid {
           grid-template-columns: 1fr;
         }
+        
+        /* Additional mobile optimizations */
+        .dataTable th, 
+        .team-table th {
+          font-size: 13px !important;
+          padding: 3px 1px !important;
+        }
+        
+        .dataTable td {
+          font-size: 14px !important;
+          padding: 3px 1px !important;
+        }
+        
+        .team-table td {
+          font-size: 17px !important;
+          padding: 3px 1px !important;
+        }
+        
+        .team-box h3 {
+          font-size: 20px !important;
+          margin-bottom: 8px !important;
+        }
       }
-      
-          # Add/modify these CSS rules in your ui.R file's tags$style section
-    
-    /* Leaderboard table header - bigger text */
-    .dataTable th {
-      font-size: 20px !important;
-      font-weight: bold !important;
-      padding: 12px 8px !important;
-      text-align: center !important;
-    }
-    
-    /* Team names in leaderboard - bigger and bolder */
-    .dataTable td:nth-child(2) {
-      font-size: 22px !important;
-      font-weight: bold !important;
-      text-align: center !important;
-    }
-    
-    /* Other leaderboard cells - ensure proper sizing and alignment */
-    .dataTable td {
-      font-size: 18px !important;
-      text-align: center !important;
-      padding: 10px 8px !important;
-    }
-    
-    /* Team names in individual team sections - bigger */
-    .team-box h3 {
-      font-size: 24px !important;
-      font-weight: bold !important;
-      text-align: center !important;
-      margin-top: 0;
-      margin-bottom: 15px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #eee;
-    }
-    
-    /* Team table headers */
-    .team-table th {
-      font-size: 18px !important;
-      font-weight: bold !important;
-      padding: 8px !important;
-      text-align: center !important;
-    }
-    
-    /* Team table cells */
-    .team-table td {
-      font-size: 16px !important;
-      padding: 8px !important;
-      text-align: center !important;
-    }
     "))
   ),
   
   # Team standings - current leaderboard
   h2("The 2025 HR Derbski Leaderboard:"),
+  
+  h6("(giancarlo stanton for mvp)"),
+  
   div(class = "leaderboard-container",
       DTOutput("team_totals")
   ),
   
   # Team details - show players and home runs
-  h2("Individual Squad Standings"),
+  h2("Squad Standings"),
   div(class = "team-details-container",
       uiOutput("player_stats")
   ),
   
   # Graph showing progress over time
-  h2("Home Run Tracker Since Opening Day"),
+  h2("Team Top 5 Total Since Opening Day"),
   div(class = "graph-container",
       plotOutput("hr_graph", height = "500px")
   ),
@@ -224,6 +284,6 @@ ui <- fluidPage(
   # Footer with last update info
   div(class = "footer",
       hr(),
-      p("Data updates automatically every minute.", style = "text-align: center; color: #666; font-size: 0.9em;")
+      p("Data updates automatically every minute (except for Derek)", style = "text-align: center; color: #666; font-size: 0.9em;")
   )
 )
