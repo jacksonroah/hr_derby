@@ -1,30 +1,56 @@
-# server.R - Server logic for the Home Run Derby app
+# server.R - 2026 HR Derby server logic
 library(shiny)
 library(ggplot2)
 library(dplyr)
-library(DT)
 library(httr)
 library(jsonlite)
 
-# Source the configuration and data processing files
 source("config.R")
 source("data_processing.R")
 
 observe({
   cat("Roster loaded:", nrow(drafted_players), "players\n")
   if (nrow(drafted_players) > 0) {
-    cat("Sample roster names:", paste(head(drafted_players$player_name, 5), collapse=", "), "\n")
+    cat("Sample names:", paste(head(drafted_players$player_name, 5), collapse = ", "), "\n")
   }
 })
 
+# ---------------------------------------------------------------------------
+# Rank circle colors
+# ---------------------------------------------------------------------------
+rank_color <- function(i) {
+  if (i == 1) "#FFD700" else if (i == 2) "#A8A9AD" else if (i == 3) "#CD7F32" else "#64748B"
+}
+
+# Ordinal suffix: 1 -> "1st", 2 -> "2nd", etc.
+ordinal_suffix <- function(n) {
+  n <- as.integer(n)
+  s <- if (n %% 100 %in% 11:13) "th" else
+       c("th","st","nd","rd","th","th","th","th","th","th")[n %% 10 + 1]
+  paste0(n, s)
+}
+
+# Convert hex color to rgba string
+hex_to_rgba <- function(hex, alpha) {
+  hex <- gsub("^#", "", hex)
+  r <- strtoi(substr(hex, 1, 2), 16)
+  g <- strtoi(substr(hex, 3, 4), 16)
+  b <- strtoi(substr(hex, 5, 6), 16)
+  paste0("rgba(", r, ",", g, ",", b, ",", alpha, ")")
+}
+
+# ---------------------------------------------------------------------------
+# Position sort order
+# ---------------------------------------------------------------------------
+POSITION_ORDER <- c("OF", "1B", "2B", "3B", "SS", "C", "UTL")
+
 server <- function(input, output, session) {
-  # Initialize status tracking
+
   status <- reactiveVal("Initializing...")
-  
-  # Reactive polling function to fetch data
-  # Reactive polling function to fetch data
+
+  # ---- API polling --------------------------------------------------------
   hr_data <- reactivePoll(
-    get_poll_interval(), 
+    get_poll_interval(),
     session,
     checkFunc = function() {
       tryCatch({
@@ -33,428 +59,605 @@ server <- function(input, output, session) {
         status("Ready")
         return(response$headers$date)
       }, error = function(e) {
-        status(paste("Error checking API:", e$message))
+        status(paste("Error:", e$message))
         return(Sys.time())
       })
     },
     valueFunc = function() {
       tryCatch({
-        # Check if we should use sample data
         if (CONFIG$api$use_sample_data) {
-          status("Using sample data mode...")
-          sample_data <- generate_sample_hr_data()
-          return(sample_data)
+          status("Using sample data...")
+          return(generate_sample_hr_data())
         }
-        
-        status("Fetching data from API...")
-        api_url <- get_api_url()
-        
-        # Get the raw data
-        raw_response <- httr::GET(api_url)
-        
-        if (http_status(raw_response)$category != "Success") {
-          status(paste("API Error:", http_status(raw_response)$message))
-          status("No data available - showing empty stats")
+
+        status("Fetching from API...")
+        raw_response <- httr::GET(get_api_url())
+
+        if (httr::http_status(raw_response)$category != "Success") {
+          status(paste("API Error:", httr::http_status(raw_response)$message))
           return(NULL)
         }
-        
-        # Parse the response
-        raw_content <- content(raw_response, "text", encoding = "UTF-8")
-        data <- jsonlite::fromJSON(raw_content)
-        
-        status(paste("Received", nrow(data), "home run records from API"))
-        
-        # Process the data using our custom function
-        processed_data <- process_data(data, drafted_players)
-        
-        # If processing failed or returned no matching data, show empty stats
-        if (is.null(processed_data) || nrow(processed_data) == 0) {
-          status("No home runs matched to roster players. Check player names in roster.csv match API exactly.")
+
+        raw_content <- httr::content(raw_response, "text", encoding = "UTF-8")
+        data        <- jsonlite::fromJSON(raw_content)
+
+        status(paste("Received", nrow(data), "HR records"))
+
+        processed <- process_data(data, drafted_players)
+
+        if (is.null(processed) || nrow(processed) == 0) {
+          status("No matching players found in API data.")
           return(NULL)
         }
-        
-        status(paste("Data processed successfully:", nrow(processed_data), "home runs matched to roster"))
-        return(processed_data)
+
+        status(paste("Matched", nrow(processed), "home runs"))
+        return(processed)
       }, error = function(e) {
         status(paste("Error fetching data:", e$message))
-        print(paste("Detailed error:", e))
-        status("Error occurred - showing empty stats")
         return(NULL)
       })
     }
   )
-  
-  # Output the current status
-  output$status_message <- renderText({
-    status()
-  })
-  
-  # Calculate total home runs per player
+
+  output$status_message <- renderText({ status() })
+
+  # ---- Core reactive data -------------------------------------------------
   total_hr_per_player <- reactive({
-    # Use the updated calculate_total_hr_per_player function
     calculate_total_hr_per_player(hr_data())
   })
-  
-  # Create leaderboard
+
   leaderboard_data <- reactive({
-    if (is.null(total_hr_per_player())) return(NULL)
+    req(total_hr_per_player())
     create_leaderboard(total_hr_per_player(), hr_data())
   })
-  
-  # Updated team_totals function with TOP 5, Total Distance, and Avg Distance
-  
-  # Modified team_totals output to use display names
-  # Modified team_totals output to use display names
-  output$team_totals <- renderDT({
-    if (is.null(leaderboard_data())) return(NULL)
-    
-    # Get colors and display names from configuration
-    team_colors <- get_team_colors()
-    text_colors <- get_team_text_colors()
-    highlight_colors <- get_team_colors(for_graph = TRUE)
-    display_names <- get_team_display_names()
-    
-    # Calculate recent statistics
-    recent_stats <- calculate_recent_hr_stats(hr_data())
-    
-    # Prepare leaderboard data - SORT BY TOP 5 TOTAL
-    leaderboard <- leaderboard_data()$leaderboard %>%
-      arrange(desc(top_n_total))  # Sort by top_n_total descending
-    
-    # Add rank column based on top_n_total
-    leaderboard$Rank <- 1:nrow(leaderboard)
-    
-    # Join with recent stats
-    if (!is.null(recent_stats)) {
-      # Join with recent stats
-      leaderboard <- leaderboard %>%
-        left_join(recent_stats, by = "team_name") %>%
-        mutate(
-          today_hr = ifelse(is.na(today_hr), 0, today_hr),
-          past7_hr = ifelse(is.na(past7_hr), 0, past7_hr),
-          longest_hr = ifelse(is.na(longest_hr), 0, round(as.numeric(longest_hr), 0)),
-          avg_distance = ifelse(is.na(avg_distance), 0, avg_distance),
-          last_name = ifelse(is.na(last_name), "", last_name)
-        )
-    } else {
-      # If no recent stats, add empty columns
-      leaderboard$today_hr <- 0
-      leaderboard$past7_hr <- 0
-      leaderboard$longest_hr <- 0
-      leaderboard$last_name <- ""
-      leaderboard$avg_distance <- 0
-    }
-    
-    # Format the distance column with average distance above longest HR
-    leaderboard <- leaderboard %>%
-      mutate(
-        formatted_distance = case_when(
-          # If we have both average and longest distance data
-          avg_distance > 0 & longest_hr > 0 & last_name != "" ~ 
-            paste0(avg_distance, " ft<br><small>(", last_name, "--", longest_hr, ")</small>"),
-          # If we only have longest HR data
-          longest_hr > 0 & last_name != "" ~ 
-            paste0("<br><small>(", last_name, " - ", longest_hr, " ft)</small>"),
-          # If we only have average distance
-          avg_distance > 0 ~ 
-            paste0("Avg: ", avg_distance, " ft"),
-          # Default case
-          TRUE ~ "No data"
-        )
-      )
-    
-    # Apply display names for the main leaderboard
-    leaderboard <- leaderboard %>%
-      mutate(
-        display_team_name = sapply(team_name, function(team) {
-          return(display_names[[team]])
-        })
-      )
-    
-    # Rename columns and select what we need
-    leaderboard <- leaderboard %>%
-      rename(
-        Team = display_team_name,  # Use display name instead of team_name
-        `TOP 5` = top_n_total,
-        `Avg Distance (Longest)` = formatted_distance,
-        `24 Hour` = today_hr,
-        `7 Days` = past7_hr
-      ) %>%
-      select(Rank, Team, `TOP 5`, `Avg Distance (Longest)`, `24 Hour`, `7 Days`)
-    
-    # Create the datatable with styling
-    dt <- datatable(
-      leaderboard, 
-      options = list(
-        dom = 't',  # Just show the table, no pagination or search
-        pageLength = -1,  # Show all rows
-        autoWidth = FALSE,  # We'll control widths with CSS
-        ordering = FALSE,  # Disable sorting
-        searching = FALSE,  # Disable search
-        paging = FALSE,     # Disable pagination
-        scrollX = FALSE     # Disable horizontal scrolling
-      ), 
-      rownames = FALSE, 
-      escape = FALSE  # Important to allow HTML in the table
-    ) 
-    
-    # We need to map back to original team names for colors since they're keyed by original names
-    # Create a mapping from display names back to original team names
-    display_to_original <- setNames(names(display_names), unlist(display_names))
-    
-    # Apply team colors (mapping display names back to original for color lookup)
-    dt <- dt %>% formatStyle(
-      columns = names(leaderboard),
-      backgroundColor = styleEqual(
-        leaderboard$Team, 
-        sapply(leaderboard$Team, function(display_team) {
-          original_team <- display_to_original[[display_team]]
-          return(team_colors[[original_team]])
-        })
-      ),
-      color = styleEqual(
-        leaderboard$Team, 
-        sapply(leaderboard$Team, function(display_team) {
-          original_team <- display_to_original[[display_team]]
-          return(text_colors[[original_team]])
-        })
-      ),
-      textAlign = 'center'
-    )
-    
-    # Highlight TOP 5 column with lighter team colors
-    dt <- dt %>% formatStyle(
-      columns = "TOP 5",
-      backgroundColor = styleEqual(
-        leaderboard$Team,
-        sapply(leaderboard$Team, function(display_team) {
-          original_team <- display_to_original[[display_team]]
-          highlight_color <- highlight_colors[original_team]
-          return(highlight_color)
-        })
-      ),
-      fontWeight = 'bold',
-      fontSize = '120%'
-    )
-    
-    return(dt)
+
+  recent_team_stats <- reactive({
+    calculate_recent_hr_stats(hr_data())
   })
-  
-  # Make sure the leaderboard is always rendered
-  outputOptions(output, "team_totals", suspendWhenHidden = FALSE)
-  
-  # Modified createPlayerTable function to use squad names
-  createPlayerTable <- function(team, team_data, recent_player_data = NULL) {
-    team_info <- CONFIG$teams$team_info[[team]]
-    counting_players <- get_counting_players()
-    bottom_display <- get_bottom_display_count()
-    squad_names <- get_team_squad_names()
-    
-    # Get text color from team config
-    text_color <- team_info$text_color
-    
-    # Merge with recent player data if available
-    if (!is.null(recent_player_data)) {
-      # Filter for just this team's players
-      team_recent <- recent_player_data %>%
-        filter(team_name == team)
-      
-      # Join with team_data
-      if (nrow(team_recent) > 0) {
-        team_data <- left_join(
-          team_data, 
-          team_recent, 
-          by = c("team_name", "player_name")
-        ) %>%
-          mutate(
-            today_hr = ifelse(is.na(today_hr), 0, today_hr),
-            past7_hr = ifelse(is.na(past7_hr), 0, past7_hr)
-          )
-      } else {
-        team_data$today_hr <- 0
-        team_data$past7_hr <- 0
-      }
-    } else {
-      team_data$today_hr <- 0
-      team_data$past7_hr <- 0
-    }
-    
-    # Create header - make Rank smaller to accommodate more columns
-    header <- tags$tr(
-      style = paste0(
-        "background-color:", team_info$primary_color, "; color:", 
-        ifelse(team_info$text_color == "black", "black", "white"), ";"
-      ),
-      tags$th("R", style = "width:8% !important;"),
-      tags$th("Player", style = "width:50% !important;"),
-      tags$th("TOTAL", style = "width:14% !important;"),
-      tags$th("24 Hour", style = "width:14% !important;"),
-      tags$th("7 Days", style = "width:14% !important;")
-    )
-    
-    # Create rows
-    rows <- lapply(1:nrow(team_data), function(i) {
-      row <- team_data[i, ]
-      rank_num <- as.integer(row$rank)
-      
-      # Determine row style based on rank
-      row_style <- ""
-      if (!is.na(rank_num)) {
-        if (rank_num <= counting_players) {
-          # Top N players - highlighted with team color
-          bg_color <- adjustcolor(team_info$primary_color, alpha.f = 0.5)
-          row_style <- paste0("background-color:", bg_color, ";")
-          
-          # Set player name color to match team text color
-          name_style <- paste0("font-weight: bold;")
-        } else if (rank_num > counting_players && rank_num <= counting_players + bottom_display) {
-          # Bottom display players - grayed out
-          row_style <- "background-color:#f0f0f0; color:#a0a0a0;"
-          name_style <- "color:#a0a0a0;"
-        } else {
-          # Regular players
-          name_style <- paste0("color:", text_color, ";")
-        }
-      } else {
-        # Total rows
-        row_style <- paste0(
-          "background-color:", team_info$primary_color, 
-          "; color:", ifelse(team_info$text_color == "black", "black", "white"), 
-          "; font-weight:bold;"
-        )
-        name_style <- "" # No additional styling needed
-      }
-      
-      tags$tr(
-        style = row_style,
-        tags$td(style = "text-align:center; padding: 4px 2px !important;", row$rank),
-        tags$td(style = paste0(name_style, " text-align:left; padding: 4px 2px !important;"), row$player_name),
-        tags$td(style = "text-align:center; padding: 4px 2px !important;", row$total_home_runs),
-        tags$td(style = "text-align:center; padding: 4px 2px !important;", row$today_hr),
-        tags$td(style = "text-align:center; padding: 4px 2px !important;", row$past7_hr)
-      )
-    })
-    
-    # Create table using squad name instead of team name
-    squad_name <- squad_names[[team]]
-    
-    tags$div(
-      class = "team-box",
-      style = "margin-bottom: 20px;",
-      tags$h3(squad_name),  # Use squad name here instead of team
-      tags$table(
-        class = "team-table",
-        style = "border-collapse:collapse; width:100%; margin-bottom:15px;",
-        tags$thead(header),
-        tags$tbody(rows)
-      )
-    )
-  }
-  
-  # Update the player_stats output
-  output$player_stats <- renderUI({
-    if (is.null(total_hr_per_player())) return(NULL)
-    
-    # Get teams and order them by leaderboard position
-    leaderboard_order <- leaderboard_data()$leaderboard %>%
-      arrange(desc(top_n_total)) %>%
-      pull(team_name)
-    
-    # Calculate recent stats for players
-    recent_player_stats <- calculate_player_recent_stats(hr_data())
-    
-    counting_players <- get_counting_players()
-    
-    # Create tables in leaderboard order
-    team_tables <- lapply(leaderboard_order, function(team) {
-      # Filter and prepare data for this team
-      team_data <- total_hr_per_player() %>%
-        filter(team_name == team) %>%
-        arrange(desc(total_home_runs)) %>%
-        mutate(
-          rank = as.character(row_number()),
-          player_name = as.character(player_name)
-        )
-      
-      # Calculate totals
-      top_n_total <- team_data %>%
-        filter(row_number() <= counting_players) %>%
-        summarise(total = sum(total_home_runs)) %>%
-        pull(total)
-      
-      all_total <- sum(team_data$total_home_runs)
-      
-      # Create total rows with explicit team_name matching
-      total_rows <- data.frame(
-        rank = c(NA_character_, NA_character_),
-        player_name = c(paste0("Top ", counting_players, " Total"), "Team Total"),
-        total_home_runs = c(top_n_total, all_total),
-        team_name = c(team, team),
-        today_hr = c(0, 0),  # Add these columns to match
-        past7_hr = c(0, 0),  # Add these columns to match
-        stringsAsFactors = FALSE
-      )
-      
-      # Combine player data with total rows - explicitly use only necessary columns
-      combined_data <- rbind(
-        team_data[, c("rank", "player_name", "total_home_runs", "team_name")],
-        total_rows[, c("rank", "player_name", "total_home_runs", "team_name")]
-      )
-      
-      # Create the table
-      createPlayerTable(team, combined_data, recent_player_stats)
-    })
-    
-    # Arrange in a responsive grid
-    tags$div(
-      class = "team-grid",
-      team_tables
-    )
+
+  recent_player_stats <- reactive({
+    calculate_player_recent_stats(hr_data())
   })
-  # Prepare data for cumulative HR graph
+
   cumulative_hr_data <- reactive({
-    if (is.null(hr_data())) return(NULL)
+    req(hr_data())
     prepare_cumulative_data(hr_data())
   })
-  
-  # Render home run graph over time
+
+  # ---- Sort mode (HR vs position) -----------------------------------------
+  sort_mode <- reactiveVal("hr")
+
+  # ---- Position tab view mode (rank vs HR total) --------------------------
+  pos_view_mode <- reactiveVal("rank")
+
+  observeEvent(input$sort_by_hr, {
+    sort_mode("hr")
+    session$sendCustomMessage("updateSortButtons", list(active = "hr"))
+  })
+
+  observeEvent(input$sort_by_position, {
+    sort_mode("position")
+    session$sendCustomMessage("updateSortButtons", list(active = "position"))
+  })
+
+  # ---- Expanded card state ------------------------------------------------
+  expanded_cards <- reactiveValues()
+  # Initialize all teams to collapsed
+  for (tm in get_team_names()) {
+    expanded_cards[[tm]] <- FALSE
+  }
+
+  observeEvent(input$toggle_card, {
+    team <- input$toggle_card$team
+    if (!is.null(team) && team %in% get_team_names()) {
+      expanded_cards[[team]] <- !isTRUE(expanded_cards[[team]])
+    }
+  })
+
+  observeEvent(input$expand_all, {
+    for (tm in get_team_names()) expanded_cards[[tm]] <- TRUE
+  })
+
+  observeEvent(input$collapse_all, {
+    for (tm in get_team_names()) expanded_cards[[tm]] <- FALSE
+  })
+
+  observeEvent(input$pos_show_rank, {
+    pos_view_mode("rank")
+    session$sendCustomMessage("updatePosButtons", list(active = "rank"))
+  })
+
+  observeEvent(input$pos_show_hr, {
+    pos_view_mode("hr")
+    session$sendCustomMessage("updatePosButtons", list(active = "hr"))
+  })
+
+  # =========================================================================
+  # Tab 1 — League Standings table
+  # =========================================================================
+  output$league_standings_table <- renderUI({
+    player_data <- total_hr_per_player()
+    if (is.null(player_data) || nrow(player_data) == 0) {
+      return(div(class = "loading-msg", "Loading standings..."))
+    }
+
+    lb_result <- leaderboard_data()
+    if (is.null(lb_result)) {
+      return(div(class = "loading-msg", "Loading standings..."))
+    }
+
+    lb <- lb_result$leaderboard %>%
+      arrange(desc(team_total)) %>%
+      mutate(rank = row_number())
+
+    recent <- recent_team_stats()
+    if (!is.null(recent)) {
+      lb <- lb %>%
+        left_join(recent, by = "team_name") %>%
+        mutate(
+          today_hr  = ifelse(is.na(today_hr),  0, today_hr),
+          past7_hr  = ifelse(is.na(past7_hr),  0, past7_hr),
+          past30_hr = ifelse(is.na(past30_hr), 0, past30_hr)
+        )
+    } else {
+      lb$today_hr  <- 0
+      lb$past7_hr  <- 0
+      lb$past30_hr <- 0
+    }
+
+    total_hr_all   <- sum(lb$team_total, na.rm = TRUE)
+    max_team_total <- max(lb$team_total, na.rm = TRUE)
+    if (max_team_total == 0) max_team_total <- 1  # avoid division by zero
+
+    total_feet_all <- if (!is.null(recent) && "avg_distance" %in% names(lb) &&
+                          "hr_count_with_distance" %in% names(lb)) {
+      total_ft <- sum(lb$avg_distance * lb$hr_count_with_distance, na.rm = TRUE)
+      if (total_ft > 0) paste0(format(round(total_ft), big.mark = ","), " ft") else ""
+    } else ""
+
+    rank_colors <- c("#FFD700", "#A8A9AD", "#CD7F32")
+
+    # Header bar
+    header_bar <- div(class = "standings-header-bar",
+      div(class = "header-left",
+        tags$span(class = "season-label", "SEASON 2026"),
+        tags$span(class = "standings-title", "2026 HR DERBY STANDINGS")
+      ),
+      div(class = "header-totals",
+        tags$span(class = "total-hr-number", total_hr_all),
+        tags$span(class = "hr-unit", "HR"),
+        if (nchar(total_feet_all) > 0)
+          div(class = "total-feet-line", total_feet_all)
+      )
+    )
+
+    # Column headers
+    col_headers <- div(class = "standings-col-headers",
+      div(class = "sh-rk", "RK"),
+      div(class = "sh-team", "TEAM"),
+      div(class = "sh-div"),
+      div(class = "sh-total", "TOTAL HR"),
+      div(class = "sh-day", "TODAY"),
+      div(class = "sh-week", "7-DAY"),
+      div(class = "sh-month", "30-DAY")
+    )
+
+    # Team rows
+    team_rows <- lapply(seq_len(nrow(lb)), function(i) {
+      row     <- lb[i, ]
+      team    <- row$team_name
+      tinfo   <- CONFIG$teams$team_info[[team]]
+      rc      <- if (i <= 3) rank_colors[i] else "#64748B"
+      is_ldr  <- (i == 1)
+      bar_pct <- round(row$team_total / max_team_total * 100)
+
+      row_bg <- if (is_ldr) {
+        paste0("background:", hex_to_rgba(tinfo$primary_color, 0.25),
+               "; border-left: 3px solid ", tinfo$primary_color, ";")
+      } else {
+        paste0("background:", hex_to_rgba(tinfo$primary_color, 0.18), ";")
+      }
+
+      day_content <- if (row$today_hr > 0) {
+        tags$span(class = "day-pill", paste0("+", row$today_hr))
+      } else {
+        tags$span(class = "em-dash", "\u2014")
+      }
+
+      total_color <- if (is_ldr) tinfo$primary_color else "#1E293B"
+
+      div(class = "standings-team-row", style = row_bg,
+        # Rank
+        div(style = "flex-shrink:0;",
+          div(class = "rank-circle",
+            style = paste0("background:", rc, ";"),
+            i)
+        ),
+        # Team name
+        div(class = "sr-team",
+          tags$span(class = "team-name-bold", tinfo$display_name),
+          tags$span(class = "team-abbr-mono", tinfo$abbr)
+        ),
+        # Divider
+        div(class = "col-divider-bar"),
+        # Total HR with small "HR" unit
+        div(class = "sr-total",
+          tags$span(style = paste0("color:", total_color, "; font-size:22px; font-weight:700; font-family:'Courier New',monospace;"),
+            row$team_total),
+          tags$span(class = "sr-hr-unit", "HR")
+        ),
+        # Day
+        div(class = "sr-day", day_content),
+        # Week
+        div(class = "sr-week", row$past7_hr),
+        # Month
+        div(class = "sr-month", row$past30_hr)
+      )
+    })
+
+    div(class = "standings-container",
+      header_bar,
+      col_headers,
+      team_rows
+    )
+  })
+
+  outputOptions(output, "league_standings_table", suspendWhenHidden = FALSE)
+
+  # =========================================================================
+  # Tab 2 — Team Roster Cards
+  # =========================================================================
+  output$team_roster_cards <- renderUI({
+    player_data <- total_hr_per_player()
+    if (is.null(player_data) || nrow(player_data) == 0) {
+      return(div(class = "loading-msg", "Loading rosters..."))
+    }
+
+    lb_result <- leaderboard_data()
+    lb_order  <- if (!is.null(lb_result)) {
+      lb_result$leaderboard %>% arrange(desc(team_total)) %>% pull(team_name)
+    } else {
+      get_team_names()
+    }
+
+    recent_p   <- recent_player_stats()
+    cur_sort   <- sort_mode()
+    rank_colors <- c("#FFD700", "#A8A9AD", "#CD7F32")
+
+    # Build team summary for card header stats
+    lb_summary <- if (!is.null(lb_result)) {
+      lb_result$leaderboard
+    } else {
+      player_data %>%
+        group_by(team_name) %>%
+        summarise(team_total = sum(total_home_runs), .groups = "drop")
+    }
+
+    recent_t <- recent_team_stats()
+
+    # Global position rank — rank within each position across ALL teams
+    global_pos_ranks <- player_data %>%
+      group_by(position) %>%
+      mutate(global_pos_rank = rank(-total_home_runs, ties.method = "min")) %>%
+      ungroup() %>%
+      select(team_name, player_name, global_pos_rank)
+
+    cards <- lapply(seq_along(lb_order), function(i) {
+      team  <- lb_order[i]
+      tinfo <- CONFIG$teams$team_info[[team]]
+      rc    <- if (i <= 3) rank_colors[i] else "#64748B"
+
+      is_expanded <- isTRUE(expanded_cards[[team]])
+
+      # Team-level stats for card header
+      t_total <- lb_summary$team_total[lb_summary$team_name == team]
+      t_total <- if (length(t_total) == 0 || is.na(t_total)) 0 else t_total
+
+      t_today  <- 0; t_week <- 0; t_month <- 0
+      if (!is.null(recent_t) && team %in% recent_t$team_name) {
+        tr <- recent_t[recent_t$team_name == team, ]
+        t_today  <- tr$today_hr[1]
+        t_week   <- tr$past7_hr[1]
+        t_month  <- tr$past30_hr[1]
+      }
+
+      # Card header
+      chevron <- if (is_expanded) "\u25BE" else "\u25B8"
+
+      card_header <- div(
+        class   = "card-header",
+        style   = paste0(
+          "border-left: 4px solid ", tinfo$primary_color, ";",
+          "background: linear-gradient(90deg, ", tinfo$pastel_color, " 0%, white 35%);"
+        ),
+        onclick = paste0("toggleCard('", team, "')"),
+
+        div(class = "ch-rank-name",
+          div(class = "rank-circle-sm",
+            style = paste0("background:", rc, ";"),
+            i),
+          div(class = "team-color-dot",
+            style = paste0("background:", tinfo$primary_color, "; margin-left:2px;")),
+          tags$span(class = "team-name-bold", style = "font-size:14px;", tinfo$display_name),
+          tags$span(class = "team-abbr-mono", tinfo$abbr)
+        ),
+        div(class = "col-divider-bar", style = "height:22px; margin: 0 6px;"),
+        div(class = "ch-stats",
+          # Total HR with label
+          div(class = "ch-stat-col",
+            div(class = "ch-total",
+              style = paste0("color:", tinfo$primary_color, ";"),
+              t_total),
+            div(class = "ch-label", "total HR")
+          ),
+          # Today with label
+          div(class = "ch-stat-col",
+            div(class = "ch-day",
+              if (t_today > 0)
+                tags$span(class = "day-pill-sm", paste0("+", t_today))
+              else
+                tags$span(class = "em-dash", "\u2014")),
+            div(class = "ch-label", "today")
+          ),
+          # 7-day with label
+          div(class = "ch-stat-col",
+            div(class = "ch-week", t_week),
+            div(class = "ch-label", "7-day")
+          ),
+          # 30-day with label
+          div(class = "ch-stat-col",
+            div(class = "ch-month", t_month),
+            div(class = "ch-label", "30-day")
+          )
+        ),
+        div(class = "ch-chevron", chevron)
+      )
+
+      # Roster table (only when expanded)
+      roster_table <- if (is_expanded) {
+        # Get players for this team
+        team_players <- player_data %>% filter(team_name == team)
+
+        # Merge recent player stats
+        if (!is.null(recent_p) && nrow(recent_p) > 0) {
+          tp_recent <- recent_p %>% filter(team_name == team)
+          if (nrow(tp_recent) > 0) {
+            team_players <- team_players %>%
+              left_join(tp_recent, by = c("team_name", "player_name")) %>%
+              mutate(
+                today_hr  = ifelse(is.na(today_hr),  0, today_hr),
+                past7_hr  = ifelse(is.na(past7_hr),  0, past7_hr),
+                past30_hr = ifelse(is.na(past30_hr), 0, past30_hr)
+              )
+          } else {
+            team_players <- team_players %>%
+              mutate(today_hr = 0, past7_hr = 0, past30_hr = 0)
+          }
+        } else {
+          team_players <- team_players %>%
+            mutate(today_hr = 0, past7_hr = 0, past30_hr = 0)
+        }
+
+        # Join global position rank
+        team_players <- team_players %>%
+          left_join(global_pos_ranks, by = c("team_name", "player_name"))
+
+        # Sort
+        if (cur_sort == "position") {
+          team_players <- team_players %>%
+            mutate(pos_order = match(position, POSITION_ORDER)) %>%
+            arrange(pos_order, desc(total_home_runs)) %>%
+            select(-pos_order)
+        } else {
+          team_players <- team_players %>%
+            arrange(desc(total_home_runs))
+        }
+
+        sub_header_bg <- hex_to_rgba(tinfo$primary_color, 0.28)
+        row_bg_uniform <- hex_to_rgba(tinfo$primary_color, 0.08)
+
+        sub_header <- tags$tr(
+          style = paste0("background:", sub_header_bg, ";"),
+          tags$th("RK"),
+          tags$th("PLAYER"),
+          tags$th("POS"),
+          tags$th("TOTAL HR"),
+          tags$th(style = "width:46px;", "POS RK"),
+          tags$th("DAY"),
+          tags$th("7D"),
+          tags$th("30D")
+        )
+
+        player_rows <- lapply(seq_len(nrow(team_players)), function(j) {
+          p <- team_players[j, ]
+
+          pos_info <- CONFIG$positions[[p$position]]
+          pos_badge <- if (!is.null(pos_info)) {
+            tags$span(class = "pos-badge",
+              style = paste0(
+                "background:", pos_info$bg_color,
+                "; color:", pos_info$text_color, ";"
+              ),
+              p$position)
+          } else {
+            tags$span(class = "pos-badge", style = "background:#F1F5F9; color:#64748B;",
+              p$position)
+          }
+
+          # Global position rank as ordinal pill
+          g_rank <- if (!is.null(p$global_pos_rank) && !is.na(p$global_pos_rank)) {
+            as.integer(p$global_pos_rank)
+          } else { 1L }
+
+          pos_rk_pill <- if (!is.null(pos_info)) {
+            tags$span(class = "pos-rank-circle",
+              style = paste0("background:", pos_info$bg_color, "; color:", pos_info$text_color, ";"),
+              ordinal_suffix(g_rank))
+          } else {
+            tags$span(class = "pos-rank-circle",
+              style = "background:#F1F5F9; color:#64748B;",
+              ordinal_suffix(g_rank))
+          }
+
+          is_top <- (j == 1)
+          day_cell <- if (p$today_hr > 0) {
+            tags$span(class = "day-pill-sm", paste0("+", p$today_hr))
+          } else {
+            tags$span(class = "em-dash", "\u2014")
+          }
+
+          hr_style <- if (is_top) paste0("color:", tinfo$primary_color, "; font-weight:700;") else ""
+
+          tags$tr(style = paste0("background:", row_bg_uniform, ";"),
+            tags$td(style = "color:#94A3B8; font-size:11px;", j),
+            tags$td(style = "text-align:left;", p$player_name),
+            tags$td(pos_badge),
+            tags$td(style = hr_style, p$total_home_runs),
+            tags$td(style = "width:46px;", pos_rk_pill),
+            tags$td(day_cell),
+            tags$td(p$past7_hr),
+            tags$td(p$past30_hr)
+          )
+        })
+
+        div(class = "roster-table-wrapper",
+          tags$table(class = "roster-table",
+            tags$thead(sub_header),
+            tags$tbody(player_rows)
+          )
+        )
+      } else {
+        NULL
+      }
+
+      div(class = "team-card",
+        card_header,
+        roster_table
+      )
+    })
+
+    div(class = "cards-container", cards)
+  })
+
+  outputOptions(output, "team_roster_cards", suspendWhenHidden = FALSE)
+
+  # =========================================================================
+  # Tab 3 — By Position grid
+  # =========================================================================
+  output$position_grid <- renderUI({
+    player_data <- total_hr_per_player()
+    if (is.null(player_data) || nrow(player_data) == 0) {
+      return(div(class = "loading-msg", "Loading position data..."))
+    }
+
+    lb_result  <- leaderboard_data()
+    team_order <- if (!is.null(lb_result)) {
+      lb_result$leaderboard %>% arrange(desc(team_total)) %>% pull(team_name)
+    } else {
+      get_team_names()
+    }
+
+    cur_view  <- pos_view_mode()
+    positions <- c("OF", "1B", "2B", "3B", "SS", "C")
+
+    # Green → red scale for ranks 1–7
+    rank_bg <- c("#86efac", "#bef264", "#fde047", "#fdba74", "#fca5a5", "#f87171", "#ef4444")
+
+    # Per-team HR totals and rank within each position
+    pos_data <- player_data %>%
+      filter(position %in% positions) %>%
+      group_by(team_name, position) %>%
+      summarise(pos_hr = sum(total_home_runs), .groups = "drop") %>%
+      group_by(position) %>%
+      mutate(pos_rank = rank(-pos_hr, ties.method = "min")) %>%
+      ungroup()
+
+    pos_colors <- get_position_colors()
+
+    # Header row — "TEAM" label + position badges
+    header_row <- tags$tr(
+      tags$th(class = "pg-team-header", "TEAM"),
+      lapply(positions, function(pos) {
+        pc <- pos_colors[[pos]]
+        tags$th(class = "pg-pos-header",
+          tags$span(class = "pos-badge",
+            style = paste0("background:", pc$bg_color, "; color:", pc$text_color,
+                           "; font-size:11px; padding:3px 8px;"),
+            pos
+          )
+        )
+      })
+    )
+
+    # Team rows
+    team_rows <- lapply(team_order, function(team) {
+      tinfo <- CONFIG$teams$team_info[[team]]
+
+      rank_cells <- lapply(positions, function(pos) {
+        row <- pos_data %>% filter(team_name == team, position == pos)
+        rk  <- if (nrow(row) == 0 || is.na(row$pos_rank[1])) 7L else as.integer(row$pos_rank[1])
+        hrs <- if (nrow(row) == 0 || is.na(row$pos_hr[1]))   0L  else as.integer(row$pos_hr[1])
+        bg  <- rank_bg[min(rk, 7L)]
+        display_val <- if (cur_view == "rank") rk else hrs
+        tags$td(class = "pg-rank-cell", style = paste0("background:", bg, ";"),
+          tags$span(class = "pg-rank-num", display_val)
+        )
+      })
+
+      tags$tr(class = "pg-team-row",
+        tags$td(class = "pg-team-cell",
+          style = paste0("background:", hex_to_rgba(tinfo$primary_color, 0.18), ";"),
+          tags$span(style = "color:#1E293B; font-weight:800; font-size:13px;",
+            tinfo$display_name)
+        ),
+        rank_cells
+      )
+    })
+
+    div(class = "pos-grid-container",
+      tags$table(class = "pos-grid-table",
+        tags$thead(header_row),
+        tags$tbody(team_rows)
+      )
+    )
+  })
+
+  outputOptions(output, "position_grid", suspendWhenHidden = FALSE)
+
+  # =========================================================================
+  # Cumulative HR graph (all players)
+  # =========================================================================
   output$hr_graph <- renderPlot({
-    # Check if we have data
     if (is.null(cumulative_hr_data())) return(NULL)
-    
-    # Get current team standings for legend order
-    standings <- leaderboard_data()$leaderboard %>%
-      arrange(desc(top_n_total))
-    
-    # Get colors from config
+
+    lb_result <- leaderboard_data()
+    standings  <- if (!is.null(lb_result)) {
+      lb_result$leaderboard %>% arrange(desc(team_total))
+    } else {
+      data.frame(team_name = get_team_names())
+    }
+
     team_colors <- get_team_colors(for_graph = TRUE)
-    
-    # Reorder data based on current standings
-    cumulative_hr_data_reordered <- cumulative_hr_data() %>%
-      mutate(team_name = factor(team_name, levels = standings$team_name))
-    
-    # Get opening day date
     opening_day <- get_opening_day()
-    
-    # Create the plot
-    ggplot(
-      cumulative_hr_data_reordered, 
-      aes(x = date, y = cumulative_hr, color = team_name)
-    ) +
-      geom_line(size = 1.5) +
+
+    cum_data <- cumulative_hr_data() %>%
+      mutate(team_name = factor(team_name, levels = standings$team_name))
+
+    ggplot(cum_data, aes(x = date, y = cumulative_hr, color = team_name)) +
+      geom_line(linewidth = 1.5) +
       labs(
-        title = paste0("Cumulative Top ", get_counting_players(), " Home Runs by Team"),
-        x = "Date", 
-        y = "Total Home Runs (Top 5)"
+        title = "Cumulative Home Runs by Team",
+        x     = "Date",
+        y     = "Total Home Runs"
       ) +
       scale_color_manual(values = team_colors) +
-      scale_x_date(limits = c(opening_day, NA)) +  # Start x-axis at opening day
+      scale_x_date(limits = c(opening_day, NA)) +
       theme_minimal() +
       theme(
-        legend.title = element_blank(),
+        legend.title    = element_blank(),
         legend.position = "top",
         legend.direction = "horizontal",
-        plot.title = element_text(hjust = 0.5, face = "bold")
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 13)
       )
   })
 }
