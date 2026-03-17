@@ -7,20 +7,7 @@ library(jsonlite)
 
 source("config.R")
 source("data_processing.R")
-
-observe({
-  cat("Roster loaded:", nrow(drafted_players), "players\n")
-  if (nrow(drafted_players) > 0) {
-    cat("Sample names:", paste(head(drafted_players$player_name, 5), collapse = ", "), "\n")
-  }
-})
-
-# ---------------------------------------------------------------------------
-# Rank circle colors
-# ---------------------------------------------------------------------------
-rank_color <- function(i) {
-  if (i == 1) "#FFD700" else if (i == 2) "#A8A9AD" else if (i == 3) "#CD7F32" else "#64748B"
-}
+options(viewer = NULL, shiny.launch.browser = TRUE)
 
 # Ordinal suffix: 1 -> "1st", 2 -> "2nd", etc.
 ordinal_suffix <- function(n) {
@@ -46,58 +33,36 @@ POSITION_ORDER <- c("OF", "1B", "2B", "3B", "SS", "C", "UTL")
 
 server <- function(input, output, session) {
 
-  status <- reactiveVal("Initializing...")
+  status  <- reactiveVal("Initializing...")
+  hr_data <- reactiveVal(NULL)
 
   # ---- API polling --------------------------------------------------------
-  hr_data <- reactivePoll(
-    get_poll_interval(),
-    session,
-    checkFunc = function() {
-      tryCatch({
-        status("Checking for updates...")
-        response <- httr::GET(get_api_url())
-        status("Ready")
-        return(response$headers$date)
-      }, error = function(e) {
-        status(paste("Error:", e$message))
-        return(Sys.time())
-      })
-    },
-    valueFunc = function() {
-      tryCatch({
-        if (CONFIG$api$use_sample_data) {
-          status("Using sample data...")
-          return(generate_sample_hr_data())
-        }
+  # Single GET per cycle; on error keeps old hr_data so UI never blanks out.
+  observe({
+    invalidateLater(get_poll_interval(), session)
+    tryCatch({
+      raw_response <- httr::GET(get_api_url())
 
-        status("Fetching from API...")
-        raw_response <- httr::GET(get_api_url())
+      if (httr::http_status(raw_response)$category != "Success") {
+        status(paste("API Error:", httr::http_status(raw_response)$message))
+        return()
+      }
 
-        if (httr::http_status(raw_response)$category != "Success") {
-          status(paste("API Error:", httr::http_status(raw_response)$message))
-          return(NULL)
-        }
+      raw_content <- httr::content(raw_response, "text", encoding = "UTF-8")
+      data        <- jsonlite::fromJSON(raw_content)
+      processed   <- process_data(data, drafted_players)
 
-        raw_content <- httr::content(raw_response, "text", encoding = "UTF-8")
-        data        <- jsonlite::fromJSON(raw_content)
-
-        status(paste("Received", nrow(data), "HR records"))
-
-        processed <- process_data(data, drafted_players)
-
-        if (is.null(processed) || nrow(processed) == 0) {
-          status("No matching players found in API data.")
-          return(NULL)
-        }
-
-        status(paste("Matched", nrow(processed), "home runs"))
-        return(processed)
-      }, error = function(e) {
-        status(paste("Error fetching data:", e$message))
-        return(NULL)
-      })
-    }
-  )
+      if (!is.null(processed) && nrow(processed) > 0) {
+        hr_data(processed)
+        status(paste("Updated —", nrow(processed), "HR records"))
+      } else {
+        status("No matching players found in API data.")
+      }
+    }, error = function(e) {
+      status(paste("Error fetching data:", e$message))
+      # hr_data unchanged — UI stays stable with last good data
+    })
+  })
 
   output$status_message <- renderText({ status() })
 
@@ -215,8 +180,6 @@ server <- function(input, output, session) {
       if (total_ft > 0) paste0(format(round(total_ft), big.mark = ","), " ft") else ""
     } else ""
 
-    rank_colors <- c("#FFD700", "#A8A9AD", "#CD7F32")
-
     # Header bar
     header_bar <- div(class = "standings-header-bar",
       div(class = "header-left",
@@ -244,53 +207,46 @@ server <- function(input, output, session) {
 
     # Team rows
     team_rows <- lapply(seq_len(nrow(lb)), function(i) {
-      row     <- lb[i, ]
-      team    <- row$team_name
-      tinfo   <- CONFIG$teams$team_info[[team]]
-      rc      <- if (i <= 3) rank_colors[i] else "#64748B"
-      is_ldr  <- (i == 1)
-      bar_pct <- round(row$team_total / max_team_total * 100)
+      row   <- lb[i, ]
+      team  <- row$team_name
+      tinfo <- CONFIG$teams$team_info[[team]]
+      is_ldr <- (i == 1)
 
-      row_bg <- if (is_ldr) {
-        paste0("background:", hex_to_rgba(tinfo$primary_color, 0.25),
+      row_bg <- if (is_ldr) {                           # leader — raise alpha for more intensity
+        paste0("background:", hex_to_rgba(tinfo$primary_color, 0.35),
                "; border-left: 3px solid ", tinfo$primary_color, ";")
-      } else {
-        paste0("background:", hex_to_rgba(tinfo$primary_color, 0.18), ";")
+      } else {                                          # non-leader — adjust alpha here
+        paste0("background:", hex_to_rgba(tinfo$primary_color, 0.35), ";")
       }
 
       day_content <- if (row$today_hr > 0) {
         tags$span(class = "day-pill", paste0("+", row$today_hr))
       } else {
-        tags$span(class = "em-dash", "\u2014")
+        tags$span(class = "em-dash", "—")
       }
 
-      total_color <- if (is_ldr) tinfo$primary_color else "#1E293B"
-
       div(class = "standings-team-row", style = row_bg,
-        # Rank
+        # Rank circle — change background color here
         div(style = "flex-shrink:0;",
-          div(class = "rank-circle",
-            style = paste0("background:", rc, ";"),
-            i)
+          div(class = "rank-circle", style = "background:#64748B;", i)
         ),
-        # Team name
+        # Team name — text colors controlled by CSS classes .team-name-bold / .team-abbr-mono in ui.R
         div(class = "sr-team",
           tags$span(class = "team-name-bold", tinfo$display_name),
           tags$span(class = "team-abbr-mono", tinfo$abbr)
         ),
-        # Divider
+        # Divider bar — color controlled by .col-divider-bar in ui.R
         div(class = "col-divider-bar"),
-        # Total HR with small "HR" unit
+        # Total HR — text color controlled by .sr-total / .sr-hr-unit in ui.R
         div(class = "sr-total",
-          tags$span(style = paste0("color:", total_color, "; font-size:22px; font-weight:700; font-family:'Courier New',monospace;"),
-            row$team_total),
+          tags$span(style = "font-size:22px; font-weight:700;", row$team_total),
           tags$span(class = "sr-hr-unit", "HR")
         ),
         # Day
         div(class = "sr-day", day_content),
-        # Week
+        # Week — text color controlled by .sr-week in ui.R
         div(class = "sr-week", row$past7_hr),
-        # Month
+        # Month — text color controlled by .sr-month in ui.R
         div(class = "sr-month", row$past30_hr)
       )
     })
@@ -322,7 +278,6 @@ server <- function(input, output, session) {
 
     recent_p   <- recent_player_stats()
     cur_sort   <- sort_mode()
-    rank_colors <- c("#FFD700", "#A8A9AD", "#CD7F32")
 
     # Build team summary for card header stats
     lb_summary <- if (!is.null(lb_result)) {
@@ -345,7 +300,6 @@ server <- function(input, output, session) {
     cards <- lapply(seq_along(lb_order), function(i) {
       team  <- lb_order[i]
       tinfo <- CONFIG$teams$team_info[[team]]
-      rc    <- if (i <= 3) rank_colors[i] else "#64748B"
 
       is_expanded <- isTRUE(expanded_cards[[team]])
 
@@ -368,13 +322,14 @@ server <- function(input, output, session) {
         class   = "card-header",
         style   = paste0(
           "border-left: 4px solid ", tinfo$primary_color, ";",
-          "background: linear-gradient(90deg, ", tinfo$pastel_color, " 0%, white 35%);"
+          # ADJUST THE GRADIENT HERE ----------------------------------------------------------!!!!!
+          "background: linear-gradient(90deg, ", tinfo$pastel_color, " 0%, white 50%);"
         ),
         onclick = paste0("toggleCard('", team, "')"),
 
         div(class = "ch-rank-name",
           div(class = "rank-circle-sm",
-            style = paste0("background:", rc, ";"),
+            style = "background:#64748B;",
             i),
           div(class = "team-color-dot",
             style = paste0("background:", tinfo$primary_color, "; margin-left:2px;")),
@@ -560,8 +515,8 @@ server <- function(input, output, session) {
     cur_view  <- pos_view_mode()
     positions <- c("OF", "1B", "2B", "3B", "SS", "C")
 
-    # Green → red scale for ranks 1–7
-    rank_bg <- c("#86efac", "#bef264", "#fde047", "#fdba74", "#fca5a5", "#f87171", "#ef4444")
+    # Subtle grey-tinted scale for ranks 1–7 (muted, not colorful)
+    rank_bg <- c("#E8F0EC", "#EDF2EA", "#F4F4EA", "#F4F2EC", "#F2ECEC", "#EDE8E8", "#E8E0E0")
 
     # Per-team HR totals and rank within each position
     pos_data <- player_data %>%
@@ -628,7 +583,17 @@ server <- function(input, output, session) {
   # Cumulative HR graph (all players)
   # =========================================================================
   output$hr_graph <- renderPlot({
-    if (is.null(cumulative_hr_data())) return(NULL)
+    cum <- cumulative_hr_data()
+    if (is.null(cum) || nrow(cum) == 0) {
+      opening_day <- get_opening_day()
+      return(
+        ggplot() +
+          annotate("text", x = 0.5, y = 0.5,
+                   label = paste0("Season starts ", format(opening_day, "%B %d, %Y")),
+                   size = 5, color = "#94A3B8") +
+          theme_void()
+      )
+    }
 
     lb_result <- leaderboard_data()
     standings  <- if (!is.null(lb_result)) {
@@ -640,7 +605,7 @@ server <- function(input, output, session) {
     team_colors <- get_team_colors(for_graph = TRUE)
     opening_day <- get_opening_day()
 
-    cum_data <- cumulative_hr_data() %>%
+    cum_data <- cum %>%
       mutate(team_name = factor(team_name, levels = standings$team_name))
 
     ggplot(cum_data, aes(x = date, y = cumulative_hr, color = team_name)) +

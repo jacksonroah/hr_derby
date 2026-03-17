@@ -118,7 +118,6 @@ ui <- fluidPage(
         font-size: 30px;
         font-weight: 800;
         line-height: 1;
-        font-family: 'Courier New', monospace;
       }
 
       .hr-unit {
@@ -195,11 +194,11 @@ ui <- fluidPage(
         letter-spacing: 0.05em;
       }
 
-      /* Divider column */
+      /* Divider column — change background to adjust divider color */
       .col-divider-bar {
         width: 3px;
         height: 32px;
-        background: #E2E8F0;
+        background: white;
         flex-shrink: 0;
         border-radius: 2px;
         margin: 0 10px;
@@ -427,7 +426,6 @@ ui <- fluidPage(
         gap: 2px;
         font-size: 20px;
         font-weight: 700;
-        font-family: 'Courier New', monospace;
         white-space: nowrap;
       }
 
@@ -577,14 +575,14 @@ ui <- fluidPage(
       }
 
       .pg-team-header {
-        width: 64px;
-        min-width: 64px;
+        width: 82px;
+        min-width: 82px;
         padding: 10px 4px;
-        background: #F8FAFC;
+        background: #C4CAD4;
         border-bottom: 2px solid #E2E8F0;
         font-size: 10px;
         font-weight: 700;
-        color: #94A3B8;
+        color: #475569;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         text-align: center;
@@ -593,7 +591,7 @@ ui <- fluidPage(
       .pg-pos-header {
         padding: 10px 4px;
         text-align: center;
-        background: #F8FAFC;
+        background: #C4CAD4;
         border-bottom: 2px solid #E2E8F0;
       }
 
@@ -601,8 +599,8 @@ ui <- fluidPage(
       .pg-team-row:last-child { border-bottom: none; }
 
       .pg-team-cell {
-        width: 64px;
-        min-width: 64px;
+        width: 82px;
+        min-width: 82px;
         padding: 24px 4px;
         white-space: normal;
         word-break: break-word;
@@ -629,6 +627,10 @@ ui <- fluidPage(
         color: #94A3B8;
         font-size: 14px;
       }
+
+      /* Suppress Shiny's recalculating dim/spinner so UI never flashes on poll */
+      .recalculating { opacity: 1 !important; transition: none !important; }
+      .shiny-busy-indicator { display: none !important; }
     ")),
 
     # -----------------------------------------------------------------------

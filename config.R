@@ -5,7 +5,7 @@ CONFIG <- list(
   api = list(
     use_mlb_api = FALSE,
     use_sample_data = FALSE,
-    url = "https://zuriteapi.com/homers/api/homeruns/?format=json&year=2026",
+    url = "https://zuriteapi.com/homers/api/homeruns/?format=json&year=2025",
     season = "2026",
     poll_interval_ms = 300000
   ),
@@ -22,9 +22,9 @@ CONFIG <- list(
         text_color    = "black",
         pastel_color  = "rgba(207, 184, 124, 0.18)"
       ),
-      "Matt" = list(
-        display_name  = "Matt",
-        abbr          = "MTT",
+      "Jackson" = list(
+        display_name  = "Jackson",
+        abbr          = "JXN",
         squad_name    = "",
         primary_color = "#005A9C",
         highlight_color = "#005A9C",

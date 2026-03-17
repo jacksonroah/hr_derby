@@ -235,7 +235,7 @@ generate_sample_hr_data <- function() {
         ),
         team_name = c(
           "Derek", "Derek", "Derek", "Derek",
-          "Matt", "Matt", "Matt",
+          "Jackson", "Jackson", "Jackson",
           "Tyler", "Tyler", "Tyler"
         ),
         stringsAsFactors = FALSE
