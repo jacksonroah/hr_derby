@@ -5,8 +5,6 @@ account: jacksonroah
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 14380260
-bundleId: 10968125
+bundleId: 11722597
 url: https://jacksonroah.shinyapps.io/HomeRunDerby_v3/
 version: 1
-asMultiple: FALSE
-asStatic: FALSE
