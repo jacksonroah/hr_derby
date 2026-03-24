@@ -205,19 +205,26 @@ server <- function(input, output, session) {
       div(class = "sh-month", "30-DAY")
     )
 
+    # Standings layout variant: "A" = color left/white right, "B" = white left/color right
+    variant <- CONFIG$game$standings_variant
+
     # Team rows
     team_rows <- lapply(seq_len(nrow(lb)), function(i) {
       row   <- lb[i, ]
       team  <- row$team_name
       tinfo <- CONFIG$teams$team_info[[team]]
-      is_ldr <- (i == 1)
+      squad <- if (!is.null(tinfo$squad_name) && nchar(tinfo$squad_name) > 0) tinfo$squad_name else NULL
 
-      row_bg <- if (is_ldr) {                           # leader — raise alpha for more intensity
-        paste0("background:", hex_to_rgba(tinfo$primary_color, 0.35),
-               "; border-left: 3px solid ", tinfo$primary_color, ";")
-      } else {                                          # non-leader — adjust alpha here
-        paste0("background:", hex_to_rgba(tinfo$primary_color, 0.35), ";")
-      }
+      color_bg   <- paste0("background:", tinfo$primary_color, ";")
+      color_text <- paste0("color:", tinfo$text_color, ";")
+      white_bg   <- "background:white;"
+
+      left_style  <- if (variant == "A") paste0(color_bg, color_text) else white_bg
+      right_style <- if (variant == "A") white_bg else paste0(color_bg, color_text)
+      divider_color <- tinfo$primary_color
+
+      # For the right side, text needs the right contrast color
+      right_text_style <- if (variant == "B") color_text else ""
 
       day_content <- if (row$today_hr > 0) {
         tags$span(class = "day-pill", paste0("+", row$today_hr))
@@ -225,29 +232,38 @@ server <- function(input, output, session) {
         tags$span(class = "em-dash", "—")
       }
 
-      div(class = "standings-team-row", style = row_bg,
-        # Rank circle — change background color here
-        div(style = "flex-shrink:0;",
-          div(class = "rank-circle", style = "background:#64748B;", i)
+      # Rank circle: white on dark bg, team color on white bg
+      rank_circle_style <- if ((variant == "A")) {
+        paste0("background: rgba(255,255,255,0.25); color:", tinfo$text_color, ";")
+      } else {
+        paste0("background:", tinfo$primary_color, "; color:", tinfo$text_color, ";")
+      }
+
+      div(class = "standings-team-row", style = "background:white; padding:0; overflow:hidden;",
+        # Left side
+        div(class = "sr-left", style = left_style,
+          div(class = "rank-circle", style = rank_circle_style, i),
+          div(class = "sr-team",
+            div(class = "sr-name-row",
+              tags$span(class = "team-name-bold", tinfo$display_name),
+              tags$span(class = "team-abbr-inline", tinfo$abbr)
+            ),
+            if (!is.null(squad)) tags$span(class = "team-squad-name", squad)
+          )
         ),
-        # Team name — text colors controlled by CSS classes .team-name-bold / .team-abbr-mono in ui.R
-        div(class = "sr-team",
-          tags$span(class = "team-name-bold", tinfo$display_name),
-          tags$span(class = "team-abbr-mono", tinfo$abbr)
-        ),
-        # Divider bar — color controlled by .col-divider-bar in ui.R
-        div(class = "col-divider-bar"),
-        # Total HR — text color controlled by .sr-total / .sr-hr-unit in ui.R
-        div(class = "sr-total",
-          tags$span(style = "font-size:22px; font-weight:700;", row$team_total),
-          tags$span(class = "sr-hr-unit", "HR")
-        ),
-        # Day
-        div(class = "sr-day", day_content),
-        # Week — text color controlled by .sr-week in ui.R
-        div(class = "sr-week", row$past7_hr),
-        # Month — text color controlled by .sr-month in ui.R
-        div(class = "sr-month", row$past30_hr)
+        # Divider
+        div(class = "col-divider-bar",
+            style = paste0("background:", divider_color, ";")),
+        # Right side
+        div(class = "sr-right", style = right_style,
+          div(class = "sr-total", style = right_text_style,
+            tags$span(style = "font-size:22px; font-weight:700;", row$team_total),
+            tags$span(class = "sr-hr-unit", "HR")
+          ),
+          div(class = "sr-day", style = right_text_style, day_content),
+          div(class = "sr-week", style = right_text_style, row$past7_hr),
+          div(class = "sr-month", style = right_text_style, row$past30_hr)
+        )
       )
     })
 
@@ -322,8 +338,7 @@ server <- function(input, output, session) {
         class   = "card-header",
         style   = paste0(
           "border-left: 4px solid ", tinfo$primary_color, ";",
-          # ADJUST THE GRADIENT HERE ----------------------------------------------------------!!!!!
-          "background: linear-gradient(90deg, ", tinfo$pastel_color, " 0%, white 50%);"
+          "background: linear-gradient(90deg, ", hex_to_rgba(tinfo$primary_color, 0.45), " 0%, white 55%);"
         ),
         onclick = paste0("toggleCard('", team, "')"),
 
@@ -515,8 +530,17 @@ server <- function(input, output, session) {
     cur_view  <- pos_view_mode()
     positions <- c("OF", "1B", "2B", "3B", "SS", "C")
 
-    # Subtle grey-tinted scale for ranks 1–7 (muted, not colorful)
-    rank_bg <- c("#E8F0EC", "#EDF2EA", "#F4F4EA", "#F4F2EC", "#F2ECEC", "#EDE8E8", "#E8E0E0")
+    # Typography scale for ranks 1–8: size + weight + darkness (no background color)
+    rank_type <- list(
+      list(size="20px", weight="800", color="#0F172A"),
+      list(size="18px", weight="700", color="#1E293B"),
+      list(size="17px", weight="700", color="#334155"),
+      list(size="15px", weight="600", color="#475569"),
+      list(size="14px", weight="500", color="#64748B"),
+      list(size="13px", weight="500", color="#94A3B8"),
+      list(size="12px", weight="400", color="#CBD5E1"),
+      list(size="12px", weight="400", color="#E2E8F0")
+    )
 
     # Per-team HR totals and rank within each position
     pos_data <- player_data %>%
@@ -550,19 +574,23 @@ server <- function(input, output, session) {
 
       rank_cells <- lapply(positions, function(pos) {
         row <- pos_data %>% filter(team_name == team, position == pos)
-        rk  <- if (nrow(row) == 0 || is.na(row$pos_rank[1])) 7L else as.integer(row$pos_rank[1])
+        rk  <- if (nrow(row) == 0 || is.na(row$pos_rank[1])) 8L else as.integer(row$pos_rank[1])
         hrs <- if (nrow(row) == 0 || is.na(row$pos_hr[1]))   0L  else as.integer(row$pos_hr[1])
-        bg  <- rank_bg[min(rk, 7L)]
+        ty  <- rank_type[[min(rk, 8L)]]
         display_val <- if (cur_view == "rank") rk else hrs
-        tags$td(class = "pg-rank-cell", style = paste0("background:", bg, ";"),
-          tags$span(class = "pg-rank-num", display_val)
+        tags$td(class = "pg-rank-cell",
+          tags$span(class = "pg-rank-num",
+            style = paste0("font-size:", ty$size, "; font-weight:", ty$weight,
+                           "; color:", ty$color, ";"),
+            display_val)
         )
       })
 
       tags$tr(class = "pg-team-row",
         tags$td(class = "pg-team-cell",
-          style = paste0("background:", hex_to_rgba(tinfo$primary_color, 0.18), ";"),
-          tags$span(style = "color:#1E293B; font-weight:800; font-size:13px;",
+          style = paste0("background:", tinfo$primary_color, "; color:", tinfo$text_color, ";"),
+          tags$span(style = paste0("color:", tinfo$text_color,
+                                   "; font-weight:700; font-size:13px;"),
             tinfo$display_name)
         ),
         rank_cells

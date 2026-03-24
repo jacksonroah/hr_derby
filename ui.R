@@ -173,18 +173,42 @@ ui <- fluidPage(
       /* Team name section */
       .sr-team {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
+        flex-direction: column;
         flex: 1;
         min-width: 0;
-        padding: 0 10px;
-        gap: 6px;
+        padding: 0 8px;
+        gap: 1px;
+        overflow: hidden;
       }
 
       .team-name-bold {
-        font-weight: 700;
-        font-size: 15px;
+        font-weight: 600;
+        font-size: 18px;
         white-space: nowrap;
-        margin-right: 6px;
+        letter-spacing: -0.3px;
+      }
+
+      .sr-name-row {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        white-space: nowrap;
+      }
+
+      .team-abbr-inline {
+        font-family: 'Courier New', monospace;
+        font-size: 10px;
+        opacity: 0.55;
+        letter-spacing: 0.05em;
+        font-weight: 500;
+      }
+
+      .team-squad-name {
+        font-size: 12px;
+        opacity: 0.7;
+        white-space: nowrap;
+        font-weight: 600;
       }
 
       .team-abbr-mono {
@@ -198,15 +222,31 @@ ui <- fluidPage(
       .col-divider-bar {
         width: 3px;
         height: 32px;
-        background: white;
+        background: black;
         flex-shrink: 0;
         border-radius: 2px;
         margin: 0 10px;
       }
 
+      /* Split-side layout for standings rows */
+      .sr-left {
+        display: flex;
+        align-items: center;
+        padding: 11px 4px 11px 14px;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .sr-right {
+        display: flex;
+        align-items: center;
+        padding: 11px 14px 11px 0;
+        flex-shrink: 0;
+      }
+
       /* Stats columns */
       .sr-total {
-        width: 68px;
+        width: 60px;
         display: flex;
         align-items: baseline;
         justify-content: center;
@@ -222,14 +262,14 @@ ui <- fluidPage(
       }
 
       .sr-day {
-        width: 46px;
+        width: 40px;
         text-align: center;
         flex-shrink: 0;
       }
 
       .sr-week,
       .sr-month {
-        width: 44px;
+        width: 38px;
         text-align: center;
         font-size: 14px;
         font-weight: 600;
@@ -241,10 +281,10 @@ ui <- fluidPage(
       .sh-rk    { width: 28px; text-align: center; flex-shrink: 0; }
       .sh-team  { flex: 1; padding: 0 10px; }
       .sh-div   { width: 23px; flex-shrink: 0; }
-      .sh-total { width: 68px; text-align: center; flex-shrink: 0; color: #3B82F6; }
-      .sh-day   { width: 46px; text-align: center; flex-shrink: 0; }
-      .sh-week  { width: 44px; text-align: center; flex-shrink: 0; }
-      .sh-month { width: 44px; text-align: center; flex-shrink: 0; }
+      .sh-total { width: 60px; text-align: center; flex-shrink: 0; color: #3B82F6; }
+      .sh-day   { width: 40px; text-align: center; flex-shrink: 0; }
+      .sh-week  { width: 38px; text-align: center; flex-shrink: 0; }
+      .sh-month { width: 38px; text-align: center; flex-shrink: 0; }
 
       /* Today pill */
       .day-pill {
@@ -470,7 +510,7 @@ ui <- fluidPage(
       .roster-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 13px;
+        font-size: 123x;
       }
 
       .roster-table th {
@@ -615,9 +655,8 @@ ui <- fluidPage(
       }
 
       .pg-rank-num {
-        font-size: 17px;
-        font-weight: 700;
-        color: #000;
+        display: inline-block;
+        line-height: 1;
       }
 
       /* Loading state */
@@ -631,6 +670,28 @@ ui <- fluidPage(
       /* Suppress Shiny's recalculating dim/spinner so UI never flashes on poll */
       .recalculating { opacity: 1 !important; transition: none !important; }
       .shiny-busy-indicator { display: none !important; }
+
+      /* Disconnected overlay — centered, clean */
+      #shiny-disconnected-overlay {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.75) !important;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+      }
+
+      #shiny-disconnected-overlay span {
+        background: white;
+        color: #0F172A;
+        font-size: 15px;
+        font-weight: 700;
+        padding: 20px 28px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+        text-align: center;
+      }
     ")),
 
     # -----------------------------------------------------------------------
