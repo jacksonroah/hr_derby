@@ -16,7 +16,7 @@ CONFIG <- list(
       "Derek" = list(
         display_name  = "Derek",
         abbr          = "DRK",
-        squad_name    = "",
+        squad_name    = "Team AI",
         primary_color = "#CFB87C",
         highlight_color = "#E6C085",
         text_color    = "black",
@@ -25,26 +25,26 @@ CONFIG <- list(
       "Jackson" = list(
         display_name  = "Jackson",
         abbr          = "JXN",
-        squad_name    = "",
-        primary_color = "#005A9C",
-        highlight_color = "#005A9C",
-        text_color    = "white",
+        squad_name    = "Dum Cha Cha",
+        primary_color = "#c41919",
+        highlight_color = "#c43c3c",
+        text_color    = "#000000",
         pastel_color  = "rgba(0, 90, 156, 0.12)"
       ),
       "Tyler" = list(
         display_name  = "Tyler",
         abbr          = "TYL",
-        squad_name    = "",
-        primary_color = "#4b2e83",
-        highlight_color = "#5A3E9B",
-        text_color    = "#ffc700",
+        squad_name    = "House Hunters",
+        primary_color = "#005A9C",
+        highlight_color = "#567be0",
+        text_color    = "#fdfdfd",
         pastel_color  = "rgba(75, 46, 131, 0.12)"
       ),
       "Jason" = list(
         display_name  = "Jason",
         abbr          = "JSN",
-        squad_name    = "",
-        primary_color = "#73000A",
+        squad_name    = "Camel",
+        primary_color = "#64010a",
         highlight_color = "#8B0000",
         text_color    = "white",
         pastel_color  = "rgba(115, 0, 10, 0.10)"
@@ -52,29 +52,38 @@ CONFIG <- list(
       "Jared" = list(
         display_name  = "Jared",
         abbr          = "JRD",
-        squad_name    = "",
+        squad_name    = "Diablo",
         primary_color = "#007030",
         highlight_color = "#154733",
-        text_color    = "#FEE123",
+        text_color    = "#ffe228",
         pastel_color  = "rgba(0, 112, 48, 0.12)"
       ),
       "Brusick" = list(
         display_name  = "Brusick",
         abbr          = "BRU",
-        squad_name    = "",
-        primary_color = "#ffce30",
-        highlight_color = "#ffce30",
+        squad_name    = "Trophyless",
+        primary_color = "#eebd1c",
+        highlight_color = "#f5db66",
         text_color    = "black",
         pastel_color  = "rgba(255, 206, 48, 0.18)"
       ),
       "Maddox" = list(
         display_name  = "Maddox",
         abbr          = "MDX",
-        squad_name    = "",
+        squad_name    = "Offseason",
         primary_color = "#1a1a1a",
         highlight_color = "#f5182f",
         text_color    = "#f5182f",
         pastel_color  = "rgba(26, 26, 26, 0.08)"
+      ),
+      "Alex" = list(
+        display_name  = "Alex",
+        abbr          = "ALX",
+        squad_name    = "Alleged Good Guy",
+        primary_color = "#d429be",
+        highlight_color = "#df8dd1",
+        text_color    = "white",
+        pastel_color  = "rgba(158, 79, 148, 0.12)"
       )
     )
   ),
@@ -82,7 +91,9 @@ CONFIG <- list(
   # Game Settings
   game = list(
     opening_day    = "2026-03-26",
-    position_slots = c("OF", "OF", "OF", "1B", "2B", "3B", "SS", "C", "UTL")
+    position_slots = c("OF", "OF", "OF", "1B", "2B", "3B", "SS", "C", "UTL"),
+    # Standings color layout: "A" = color left / white right, "B" = white left / color right
+    standings_variant = "A"
   ),
 
   # Position badge color map
