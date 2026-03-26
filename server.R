@@ -248,7 +248,7 @@ server <- function(input, output, session) {
               tags$span(class = "team-name-bold", tinfo$display_name),
               tags$span(class = "team-abbr-inline", tinfo$abbr)
             ),
-            if (!is.null(squad)) tags$span(class = "team-squad-name", squad)
+            if (!is.null(squad)) tags$span(class = "team-squad-name", paste0("\u201c", squad, "\u201d"))
           )
         ),
         # Divider

@@ -38,7 +38,7 @@ normalize_name <- function(name) {
 # Load roster (new 2026 schema: player_name, team_name, position)
 # ---------------------------------------------------------------------------
 load_roster <- function() {
-  valid_positions <- c("OF", "1B", "2B", "3B", "SS", "C", "UTL")
+  valid_positions <- c("OF", "1B", "2B", "3B", "SS", "C", "UTL", "BENCH")
 
   tryCatch({
     roster_file <- if (file.exists("roster_2026.csv")) "roster_2026.csv" else "roster.csv"
@@ -131,7 +131,8 @@ process_data <- function(raw_data, roster) {
       inner_join(roster, by = "normalized_name") %>%
       select(-player_name.x) %>%
       rename(player_name = player_name.y) %>%
-      select(-normalized_name)
+      select(-normalized_name) %>%
+      filter(position != "BENCH")
 
     return(joined_data)
   }, error = function(e) {
