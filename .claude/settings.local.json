@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(where.exe Rscript:*)"
+      "Bash(where.exe Rscript:*)",
+      "Bash(Rscript:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(rm rsconnect/shinyapps.io/jacksonroah/hrderby2026.dcf)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)"
     ]
   }
 }

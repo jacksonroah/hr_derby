@@ -1,88 +1,88 @@
-player_name,team_name,position
-Pete Alonso,Jackson,1B
-Ketel Marte,Jackson,2B
-Brent Rooker,Jackson, OF
-Fernando Tatis Jr.,Jackson,OF
-Munetaka Murakami,Jackson,3B
-Spencer Torkelson,Jackson,UTL
-Hunter Goodman,Jackson,C
-Seiya Suzuki,Jackson,BENCH
-Willy Adames,Jackson,SS
-Jac Caglianone,Jackson,OF
+player_name,team_name,position,mlb_team
+Pete Alonso,Jackson,1B,NYM
+Ketel Marte,Jackson,2B,ARI
+Brent Rooker,Jackson,OF,OAK
+Fernando Tatis Jr.,Jackson,OF,SDP
+Munetaka Murakami,Jackson,3B,NYM
+Spencer Torkelson,Jackson,UTL,DET
+Hunter Goodman,Jackson,C,COL
+Seiya Suzuki,Jackson,BENCH,CHC
+Willy Adames,Jackson,SS,SF
+Jac Caglianone,Jackson,OF,KCR
 
-Zach Neto,Alex,SS
-Ronald Acuna Jr.,Alex,OF
-Austin Riley,Alex,UTL
-James Wood,Alex,OF
-Riley Greene,Alex,OF
-Brice Turang,Alex,2B
-Tyler Soderstrom,Alex,1B
-Wyatt Langford,Alex,BENCH
-Logan O'Hoppe,Alex,C
-Junior Caminero,Alex,3B
+Zach Neto,Alex,SS,LAA
+Ronald Acuna Jr.,Alex,OF,ATL
+Austin Riley,Alex,UTL,ATL
+James Wood,Alex,OF,WSH
+Riley Greene,Alex,OF,DET
+Brice Turang,Alex,2B,MIL
+Tyler Soderstrom,Alex,1B,OAK
+Wyatt Langford,Alex,BENCH,TEX
+Logan O'Hoppe,Alex,C,LAA
+Junior Caminero,Alex,3B,TBR
 
-Gunnar Henderson,Brusick,SS
-Roman Anthony,Brusick,OF
-Yordan Alvarez,Brusick,UTL
-Oneil Cruz,Brusick,OF
-Shea Langeliers,Brusick,C
-Teoscar Hernandez,Brusick,OF
-Michael Busch,Brusick,1B
-Marcus Semien,Brusick,2B
-Jose Ramirez,Brusick,3B
-Carson Montgomery,Brusick,BENCH
+Gunnar Henderson,Brusick,SS,BAL
+Roman Anthony,Brusick,OF,BOS
+Yordan Alvarez,Brusick,UTL,HOU
+Oneil Cruz,Brusick,OF,PIT
+Shea Langeliers,Brusick,C,OAK
+Teoscar Hernandez,Brusick,OF,LAD
+Michael Busch,Brusick,1B,CHC
+Marcus Semien,Brusick,2B,TEX
+Jose Ramirez,Brusick,3B,CLE
+Carson Montgomery,Brusick,BENCH,TEX
 
-Shohei Ohtani,Jason,UTL
-Julio Rodriguez,Jason,OF
-Francisco Lindor,Jason,SS
-Jackson Chourio,Jason,OF
-Bryce Harper,Jason,1B
-Corbin Carroll,Jason,OF
-William Contreras,Jason,C
-Maikel Garcia,Jason,3B
-Nico Hoerner,Jason,2B
-Trea Turner,Jason,BENCH
+Shohei Ohtani,Jason,UTL,LAD
+Julio Rodriguez,Jason,OF,SEA
+Francisco Lindor,Jason,SS,NYM
+Jackson Chourio,Jason,OF,MIL
+Bryce Harper,Jason,1B,PHI
+Corbin Carroll,Jason,OF,ARI
+William Contreras,Jason,C,MIL
+Maikel Garcia,Jason,3B,KCR
+Nico Hoerner,Jason,2B,CHC
+Trea Turner,Jason,BENCH,PHI
 
-Nick Kurtz,Kirk,1B
-Jazz Chisholm Jr.,Kirk,2B
-Dansby Swanson,Kirk,SS
-Jo Adell,Kirk,OF
-Ben Rice,Kirk,C
-Alex Bregman,Kirk,3B
-Taylor Ward,Kirk,OF
-Randy Arozarena,Kirk,OF
-Christian Walker,Kirk,BENCH
-Kyle Schwarber, Kirk, UTL
+Nick Kurtz,Kirk,1B,OAK
+Jazz Chisholm Jr.,Kirk,2B,NYY
+Dansby Swanson,Kirk,SS,CHC
+Jo Adell,Kirk,OF,LAA
+Ben Rice,Kirk,C,NYY
+Alex Bregman,Kirk,3B,BOS
+Taylor Ward,Kirk,OF,LAA
+Randy Arozarena,Kirk,OF,SEA
+Christian Walker,Kirk,BENCH,HOU
+Kyle Schwarber,Kirk,UTL,PHI
 
-Bobby Witt Jr.,Tyler,SS
-Matt Olson,Tyler,1B
-Kyle Tucker,Tyler,OF
-Pete Crow-Armstrong,Tyler,OF
-Max Muncy,Tyler,3B
-Will Smith,Tyler,C
-Josh Naylor,Tyler,UTL
-Jackson Holliday,Tyler,2B
-Bo Bichette,Tyler,BENCH
-Juan Soto, Tyler, OF
+Bobby Witt Jr.,Tyler,SS,KCR
+Matt Olson,Tyler,1B,ATL
+Kyle Tucker,Tyler,OF,CHC
+Pete Crow-Armstrong,Tyler,OF,CHC
+Max Muncy,Tyler,3B,LAD
+Will Smith,Tyler,C,LAD
+Josh Naylor,Tyler,UTL,CLE
+Jackson Holliday,Tyler,2B,BAL
+Bo Bichette,Tyler,BENCH,TOR
+Juan Soto,Tyler,OF,NYM
 
-Cal Raleigh,Derek,C
-Corey Seager,Derek,SS
-Vinnie Pasquantino,Derek,1B
-Eugenio Suarez,Derek,3B
-Giancarlo Stanton,Derek,OF
-Jose Altuve,Derek,2B
-Mike Trout,Derek,OF
-Adolis Garcia,Derek,OF
-Christian Yelich,Derek,UTL
-George Springer,Derek,BENCH
+Cal Raleigh,Derek,C,SEA
+Corey Seager,Derek,SS,TEX
+Vinnie Pasquantino,Derek,1B,KCR
+Eugenio Suarez,Derek,3B,ARI
+Giancarlo Stanton,Derek,OF,NYY
+Jose Altuve,Derek,2B,HOU
+Mike Trout,Derek,OF,LAA
+Adolis Garcia,Derek,OF,TEX
+Christian Yelich,Derek,UTL,MIL
+George Springer,Derek,BENCH,TOR
 
-Aaron Judge,Maddox,OF
-Elly De La Cruz,Maddox,SS
-Mookie Betts,Maddox,UTL
-Vladimir Guerrero Jr.,Maddox,1B
-Rafael Devers,Maddox,BENCH
-Manny Machado,Maddox,3B
-Byron Buxton,Maddox,OF
-Salvador Perez,Maddox,C
-Cody Bellinger,Maddox,OF
-Brandon Lowe,Maddox,2B
+Aaron Judge,Maddox,OF,NYY
+Elly De La Cruz,Maddox,SS,CIN
+Mookie Betts,Maddox,UTL,LAD
+Vladimir Guerrero Jr.,Maddox,1B,TOR
+Rafael Devers,Maddox,BENCH,BOS
+Manny Machado,Maddox,3B,SDP
+Byron Buxton,Maddox,OF,MIN
+Salvador Perez,Maddox,C,KCR
+Cody Bellinger,Maddox,OF,NYY
+Brandon Lowe,Maddox,2B,TBR

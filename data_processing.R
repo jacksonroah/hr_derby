@@ -8,6 +8,19 @@ library(jsonlite)
 source("config.R")
 
 # ---------------------------------------------------------------------------
+# "Today" in Pacific Time with a 4am rollover cutoff.
+# Shinyapps.io runs in UTC, so Sys.Date() resets at 4–5pm PST.
+# This returns the calendar date a PST viewer would consider "today",
+# rolling over at 4am PST (not midnight) so late-night stats persist.
+# ---------------------------------------------------------------------------
+get_today_pst <- function() {
+  now_pst <- as.POSIXct(Sys.time(), tz = "America/Los_Angeles")
+  d <- as.Date(now_pst, tz = "America/Los_Angeles")
+  hour_pst <- as.integer(format(now_pst, "%H"))
+  if (hour_pst < 4) d - 1L else d
+}
+
+# ---------------------------------------------------------------------------
 # Name normalization
 # ---------------------------------------------------------------------------
 normalize_name <- function(name) {
@@ -52,12 +65,12 @@ load_roster <- function() {
     roster <- readr::read_csv(roster_file, col_types = cols(
       player_name = col_character(),
       team_name   = col_character(),
-      position    = col_character()
-    ))
+      position    = col_character(),
+      mlb_team    = col_character()
+    )) %>% dplyr::filter(!is.na(player_name))
 
     required_cols <- c("player_name", "team_name", "position")
     if (!all(required_cols %in% colnames(roster))) {
-      # Fallback: if old 2-column format, add blank position
       if (all(c("player_name", "team_name") %in% colnames(roster))) {
         warning("roster CSV missing position column; defaulting to UTL")
         roster$position <- "UTL"
@@ -150,18 +163,16 @@ calculate_total_hr_per_player <- function(data) {
   roster <- drafted_players
 
   if (is.null(data)) {
-    player_totals <- roster %>%
-      mutate(total_home_runs = 0) %>%
-      arrange(team_name, desc(total_home_runs))
-    return(player_totals)
+    return(roster %>% mutate(total_home_runs = 0) %>% arrange(team_name, desc(total_home_runs)))
   }
 
   players_with_hrs <- data %>%
     group_by(team_name, player_name) %>%
     summarise(total_home_runs = n(), .groups = "drop")
 
+  keep_cols <- intersect(c("team_name", "player_name", "position", "mlb_team"), names(roster))
   all_players <- roster %>%
-    select(team_name, player_name, position) %>%
+    select(all_of(keep_cols)) %>%
     left_join(players_with_hrs, by = c("team_name", "player_name")) %>%
     mutate(total_home_runs = ifelse(is.na(total_home_runs), 0, total_home_runs)) %>%
     arrange(team_name, desc(total_home_runs))
@@ -208,7 +219,7 @@ create_leaderboard <- function(player_totals, hr_data = NULL) {
 calculate_recent_hr_stats <- function(data) {
   if (is.null(data) || nrow(data) == 0) return(NULL)
 
-  today      <- Sys.Date()
+  today      <- get_today_pst()
   week_ago   <- today - 7
   month_ago  <- today - 30
 
@@ -295,7 +306,7 @@ calculate_recent_hr_stats <- function(data) {
 calculate_player_recent_stats <- function(data) {
   if (is.null(data) || nrow(data) == 0) return(NULL)
 
-  today     <- Sys.Date()
+  today     <- get_today_pst()
   week_ago  <- today - 7
   month_ago <- today - 30
 
@@ -331,13 +342,26 @@ calculate_player_recent_stats <- function(data) {
 
 # ---------------------------------------------------------------------------
 # Prepare cumulative data — all players, no top-N filter
+# All teams anchored to 0 on the day before opening day so the graph
+# always starts at zero rather than the first HR date.
 # ---------------------------------------------------------------------------
 prepare_cumulative_data <- function(data) {
-  if (is.null(data) || nrow(data) == 0) return(NULL)
-
   opening_day <- get_opening_day()
+  all_teams   <- get_team_names()
 
-  cumulative_data <- data %>%
+  # Zero anchor: every team starts at 0 on opening_day - 1
+  zero_anchor <- data.frame(
+    team_name     = all_teams,
+    date          = opening_day - 1,
+    cumulative_hr = 0L,
+    stringsAsFactors = FALSE
+  )
+
+  if (is.null(data) || nrow(data) == 0) {
+    return(zero_anchor)
+  }
+
+  daily_counts <- data %>%
     mutate(date = as.Date(date)) %>%
     filter(date >= opening_day) %>%
     group_by(team_name, date) %>%
@@ -345,7 +369,11 @@ prepare_cumulative_data <- function(data) {
     arrange(team_name, date) %>%
     group_by(team_name) %>%
     mutate(cumulative_hr = cumsum(daily_hr)) %>%
-    ungroup()
+    ungroup() %>%
+    select(team_name, date, cumulative_hr)
+
+  cumulative_data <- bind_rows(zero_anchor, daily_counts) %>%
+    arrange(team_name, date)
 
   if (nrow(cumulative_data) > 0) {
     message("Cumulative data prepared:")

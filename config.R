@@ -5,7 +5,7 @@ CONFIG <- list(
   api = list(
     use_mlb_api = FALSE,
     use_sample_data = FALSE,
-    url = "https://zuriteapi.com/homers/api/homeruns/?format=json&year=2025",
+    url = "https://zuriteapi.com/homers/api/homeruns/?format=json&year=2026",
     season = "2026",
     poll_interval_ms = 300000
   ),
@@ -16,7 +16,7 @@ CONFIG <- list(
       "Derek" = list(
         display_name  = "Derek",
         abbr          = "DRK",
-        squad_name    = "Team AI",
+        squad_name    = "The Fedora Dumpers",
         primary_color = "#CFB87C",
         highlight_color = "#E6C085",
         text_color    = "black",
@@ -25,8 +25,8 @@ CONFIG <- list(
       "Jackson" = list(
         display_name  = "Jackson",
         abbr          = "JXN",
-        squad_name    = "Dum Cha Cha",
-        primary_color = "#c41919",
+        squad_name    = "Los DumChaCha's",
+        primary_color = "#f20f0f",
         highlight_color = "#c43c3c",
         text_color    = "#000000",
         pastel_color  = "rgba(0, 90, 156, 0.12)"
@@ -34,7 +34,7 @@ CONFIG <- list(
       "Tyler" = list(
         display_name  = "Tyler",
         abbr          = "TYL",
-        squad_name    = "House Hunters",
+        squad_name    = "Derek's Divots",
         primary_color = "#005A9C",
         highlight_color = "#567be0",
         text_color    = "#fdfdfd",
@@ -43,16 +43,16 @@ CONFIG <- list(
       "Jason" = list(
         display_name  = "Jason",
         abbr          = "JSN",
-        squad_name    = "Camel",
+        squad_name    = "Drunk Autodraft",
         primary_color = "#64010a",
         highlight_color = "#8B0000",
         text_color    = "white",
         pastel_color  = "rgba(115, 0, 10, 0.10)"
       ),
-      "Jared" = list(
-        display_name  = "Jared",
-        abbr          = "JRD",
-        squad_name    = "Diablo",
+      "Kirk" = list(
+        display_name  = "Kirk",
+        abbr          = "KRK",
+        squad_name    = "Señor Diablo",
         primary_color = "#007030",
         highlight_color = "#154733",
         text_color    = "#ffe228",
@@ -70,7 +70,7 @@ CONFIG <- list(
       "Maddox" = list(
         display_name  = "Maddox",
         abbr          = "MDX",
-        squad_name    = "Offseason",
+        squad_name    = "Kristi's Klappers",
         primary_color = "#1a1a1a",
         highlight_color = "#f5182f",
         text_color    = "#f5182f",
@@ -79,7 +79,7 @@ CONFIG <- list(
       "Alex" = list(
         display_name  = "Alex",
         abbr          = "ALX",
-        squad_name    = "Alleged Good Guy",
+        squad_name    = "Confirmed Good Guy",
         primary_color = "#d429be",
         highlight_color = "#df8dd1",
         text_color    = "white",
@@ -119,7 +119,7 @@ get_team_names <- function() {
 get_team_colors <- function(for_graph = FALSE) {
   team_names <- get_team_names()
   if (for_graph) {
-    colors <- sapply(team_names, function(t) CONFIG$teams$team_info[[t]]$highlight_color)
+    colors <- sapply(team_names, function(t) CONFIG$teams$team_info[[t]]$primary_color)
     return(colors)
   } else {
     colors <- sapply(team_names, function(t) CONFIG$teams$team_info[[t]]$primary_color)

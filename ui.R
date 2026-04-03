@@ -106,10 +106,11 @@ ui <- fluidPage(
       }
 
       .standings-title {
-        font-size: 17px;
+        font-size: 16px;
         font-weight: 800;
         letter-spacing: -0.3px;
         line-height: 1;
+        white-space: nowrap;
       }
 
       .header-totals { text-align: right; }
@@ -244,14 +245,20 @@ ui <- fluidPage(
         flex-shrink: 0;
       }
 
-      /* Stats columns */
+      /* Stats columns — narrowed ~12px total to give name column more room */
       .sr-total {
-        width: 60px;
+        width: 56px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .sr-total-nums {
         display: flex;
         align-items: baseline;
-        justify-content: center;
         gap: 3px;
-        flex-shrink: 0;
       }
 
       .sr-hr-unit {
@@ -262,14 +269,14 @@ ui <- fluidPage(
       }
 
       .sr-day {
-        width: 40px;
+        width: 37px;
         text-align: center;
         flex-shrink: 0;
       }
 
       .sr-week,
       .sr-month {
-        width: 38px;
+        width: 36px;
         text-align: center;
         font-size: 14px;
         font-weight: 600;
@@ -281,10 +288,10 @@ ui <- fluidPage(
       .sh-rk    { width: 28px; text-align: center; flex-shrink: 0; }
       .sh-team  { flex: 1; padding: 0 10px; }
       .sh-div   { width: 23px; flex-shrink: 0; }
-      .sh-total { width: 60px; text-align: center; flex-shrink: 0; color: #3B82F6; }
-      .sh-day   { width: 40px; text-align: center; flex-shrink: 0; }
-      .sh-week  { width: 38px; text-align: center; flex-shrink: 0; }
-      .sh-month { width: 38px; text-align: center; flex-shrink: 0; }
+      .sh-total { width: 56px; text-align: center; flex-shrink: 0; color: #3B82F6; }
+      .sh-day   { width: 37px; text-align: center; flex-shrink: 0; }
+      .sh-week  { width: 36px; text-align: center; flex-shrink: 0; }
+      .sh-month { width: 36px; text-align: center; flex-shrink: 0; }
 
       /* Today pill */
       .day-pill {
@@ -548,6 +555,27 @@ ui <- fluidPage(
         white-space: nowrap;
       }
 
+      .mlb-badge {
+        display: inline-block;
+        padding: 2px 5px;
+        border-radius: 3px;
+        background: #E2E8F0;
+        color: #475569;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+      }
+
+      .tie-note {
+        font-size: 9px;
+        color: #94A3B8;
+        font-weight: 500;
+        text-align: center;
+        white-space: nowrap;
+        line-height: 1.2;
+      }
+
       /* Position rank — pill shape to fit ordinals */
       .pos-rank-circle {
         display: inline-flex;
@@ -667,6 +695,39 @@ ui <- fluidPage(
         font-size: 14px;
       }
 
+      /* ---- Initial loading overlay ------------------------------------- */
+      #app-loading {
+        position: fixed;
+        inset: 0;
+        background: #0F172A;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        transition: opacity 0.35s ease;
+      }
+
+      .load-spinner {
+        width: 42px;
+        height: 42px;
+        border: 3px solid rgba(255,255,255,0.15);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: ld-spin 0.75s linear infinite;
+      }
+
+      .load-text {
+        color: rgba(255,255,255,0.55);
+        font-size: 13px;
+        font-weight: 600;
+        margin-top: 14px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      @keyframes ld-spin { to { transform: rotate(360deg); } }
+
       /* Suppress Shiny's recalculating dim/spinner so UI never flashes on poll */
       .recalculating { opacity: 1 !important; transition: none !important; }
       .shiny-busy-indicator { display: none !important; }
@@ -739,8 +800,27 @@ ui <- fluidPage(
           }
         });
       });
+
+      // Hide loading overlay once the standings table first renders
+      $(document).on('shiny:value', function(e) {
+        if (e.name === 'league_standings_table') {
+          var el = document.getElementById('app-loading');
+          if (el) {
+            el.style.opacity = '0';
+            setTimeout(function() { el.style.display = 'none'; }, 380);
+          }
+        }
+      });
     "))
   ), # end tags$head
+
+  # =========================================================================
+  # Loading overlay — visible immediately, fades out once standings render
+  # =========================================================================
+  div(id = "app-loading",
+    div(class = "load-spinner"),
+    div(class = "load-text", "HR Derbski")
+  ),
 
   # =========================================================================
   # App shell
