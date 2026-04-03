@@ -163,12 +163,23 @@ calculate_total_hr_per_player <- function(data) {
   roster <- drafted_players
 
   if (is.null(data)) {
-    return(roster %>% mutate(total_home_runs = 0) %>% arrange(team_name, desc(total_home_runs)))
+    return(roster %>% mutate(total_home_runs = 0, avg_distance = NA_real_) %>% arrange(team_name, desc(total_home_runs)))
   }
 
   players_with_hrs <- data %>%
     group_by(team_name, player_name) %>%
     summarise(total_home_runs = n(), .groups = "drop")
+
+  if ("hit_distance" %in% colnames(data)) {
+    data$hit_distance <- as.numeric(as.character(data$hit_distance))
+    player_distances <- data %>%
+      filter(!is.na(hit_distance)) %>%
+      group_by(team_name, player_name) %>%
+      summarise(avg_distance = round(mean(hit_distance, na.rm = TRUE)), .groups = "drop")
+    players_with_hrs <- left_join(players_with_hrs, player_distances, by = c("team_name", "player_name"))
+  } else {
+    players_with_hrs$avg_distance <- NA_real_
+  }
 
   keep_cols <- intersect(c("team_name", "player_name", "position", "mlb_team"), names(roster))
   all_players <- roster %>%
@@ -372,8 +383,27 @@ prepare_cumulative_data <- function(data) {
     ungroup() %>%
     select(team_name, date, cumulative_hr)
 
-  cumulative_data <- bind_rows(zero_anchor, daily_counts) %>%
+  raw_cum <- bind_rows(zero_anchor, daily_counts) %>%
     arrange(team_name, date)
+
+  # Expand to every date so all teams share the same x-axis (flat line on no-HR days)
+  today_pst <- get_today_pst()
+  max_date  <- max(c(max(raw_cum$date), today_pst))
+  all_dates <- seq(opening_day - 1, max_date, by = "day")
+  full_grid <- expand.grid(
+    team_name = all_teams,
+    date      = all_dates,
+    stringsAsFactors = FALSE
+  )
+  full_grid$date <- as.Date(full_grid$date)
+
+  cumulative_data <- full_grid %>%
+    left_join(raw_cum, by = c("team_name", "date")) %>%
+    arrange(team_name, date) %>%
+    group_by(team_name) %>%
+    tidyr::fill(cumulative_hr, .direction = "down") %>%
+    mutate(cumulative_hr = ifelse(is.na(cumulative_hr), 0L, as.integer(cumulative_hr))) %>%
+    ungroup()
 
   if (nrow(cumulative_data) > 0) {
     message("Cumulative data prepared:")

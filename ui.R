@@ -517,31 +517,36 @@ ui <- fluidPage(
       .roster-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 123x;
+        font-size: 13px;
       }
 
       .roster-table th {
-        padding: 7px 5px;
-        font-size: 10px;
+        padding: 6px 2px;
+        font-size: 9px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.04em;
         color: #1E293B;
         text-align: center;
         border-bottom: 1px solid rgba(0,0,0,0.10);
       }
 
-      .roster-table th:nth-child(2) { text-align: left; padding-left: 8px; }
+      .roster-table th:nth-child(1) { width: 18px; padding: 6px 1px; }
+      .roster-table th:nth-child(3) { text-align: left; padding-left: 6px; }
 
       .roster-table td {
-        padding: 7px 5px;
+        padding: 6px 2px;
         text-align: center;
         border-bottom: 1px solid #F1F5F9;
         font-size: 13px;
         color: #1E293B;
       }
 
-      .roster-table td:nth-child(2) { text-align: left; padding-left: 8px; font-size: 13px; }
+      .roster-table td:nth-child(1) { width: 18px; padding: 6px 1px; font-size: 11px; }
+      .roster-table td:nth-child(3) { text-align: left; padding-left: 6px; font-size: 13px; }
+
+      /* Bench player row — greyed out with separator line */
+      .bench-row { border-top: 2px solid #475569; opacity: 0.45; }
       .roster-table tr:last-child td { border-bottom: none; }
 
       /* Position badge */

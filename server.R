@@ -272,9 +272,9 @@ server <- function(input, output, session) {
       div(class = "sh-team", "TEAM"),
       div(class = "sh-div"),
       div(class = "sh-total", "TOTAL HR"),
-      div(class = "sh-day", "TODAY"),
-      div(class = "sh-week", "7-DAY"),
-      div(class = "sh-month", "30-DAY")
+      div(class = "sh-day", "DAY"),
+      div(class = "sh-week", "7D"),
+      div(class = "sh-month", "30D")
     )
 
     # Standings layout variant: "A" = color left/white right, "B" = white left/color right
@@ -429,7 +429,7 @@ server <- function(input, output, session) {
             i),
           div(class = "team-color-dot",
             style = paste0("background:", tinfo$primary_color, "; margin-left:2px;")),
-          tags$span(class = "team-name-bold", style = "font-size:14px;", tinfo$display_name),
+          tags$span(class = "team-name-bold", style = "font-size:17px;", tinfo$display_name),
           tags$span(class = "team-abbr-mono", tinfo$abbr)
         ),
         div(class = "col-divider-bar", style = "height:22px; margin: 0 6px;"),
@@ -515,11 +515,12 @@ server <- function(input, output, session) {
         sub_header <- tags$tr(
           style = paste0("background:", sub_header_bg, ";"),
           tags$th("RK"),
-          tags$th("PLAYER"),
-          tags$th("MLB"),
           tags$th("POS"),
+          tags$th("PLAYER"),
           tags$th("TOTAL HR"),
-          tags$th(style = "width:46px;", "POS RK"),
+          tags$th("MLB"),
+          tags$th(style = "width:40px;", "POS RK"),
+          tags$th("AVG DIST"),
           tags$th("DAY"),
           tags$th("7D"),
           tags$th("30D")
@@ -529,17 +530,6 @@ server <- function(input, output, session) {
           p <- team_players[j, ]
 
           pos_info <- CONFIG$positions[[p$position]]
-          pos_badge <- if (!is.null(pos_info)) {
-            tags$span(class = "pos-badge",
-              style = paste0(
-                "background:", pos_info$bg_color,
-                "; color:", pos_info$text_color, ";"
-              ),
-              p$position)
-          } else {
-            tags$span(class = "pos-badge", style = "background:#F1F5F9; color:#64748B;",
-              p$position)
-          }
 
           # Global position rank as ordinal pill
           g_rank <- if (!is.null(p$global_pos_rank) && !is.na(p$global_pos_rank)) {
@@ -556,24 +546,53 @@ server <- function(input, output, session) {
               ordinal_suffix(g_rank))
           }
 
-          is_top <- (j == 1)
           day_cell <- if (p$today_hr > 0) {
             tags$span(class = "day-pill-sm", paste0("+", p$today_hr))
           } else {
             tags$span(class = "em-dash", "\u2014")
           }
 
-          hr_style <- if (is_top) paste0("color:", tinfo$primary_color, "; font-weight:700;") else ""
-
           mlb_abbr <- if ("mlb_team" %in% names(p) && !is.na(p$mlb_team)) p$mlb_team else ""
+          is_bench <- !is.null(p$position) && p$position == "BENCH"
 
-          tags$tr(style = paste0("background:", row_bg_uniform, ";"),
-            tags$td(style = "color:#94A3B8; font-size:11px;", j),
-            tags$td(style = "text-align:left;", p$player_name),
+          display_pos <- dplyr::case_when(
+            p$position == "BENCH" ~ "BN",
+            p$position == "UTL"   ~ "UT",
+            TRUE                  ~ p$position
+          )
+
+          pos_badge_display <- if (!is.null(pos_info)) {
+            tags$span(class = "pos-badge",
+              style = paste0(
+                "background:", pos_info$bg_color,
+                "; color:", pos_info$text_color, ";"
+              ),
+              display_pos)
+          } else {
+            tags$span(class = "pos-badge", style = "background:#F1F5F9; color:#64748B;",
+              display_pos)
+          }
+
+          avg_dist_val <- if ("avg_distance" %in% names(p) && !is.na(p$avg_distance) && p$avg_distance > 0) {
+            if (team == "Derek") {
+              paste0(as.integer(round(p$avg_distance * 0.3048)), "m")
+            } else {
+              as.integer(round(p$avg_distance))
+            }
+          } else {
+            tags$span(class = "em-dash", "\u2014")
+          }
+
+          tags$tr(
+            class = if (is_bench) "bench-row" else "",
+            style = paste0("background:", row_bg_uniform, ";"),
+            tags$td(style = "font-size:11px;", j),
+            tags$td(pos_badge_display),
+            tags$td(style = "text-align:left; font-weight:700;", p$player_name),
+            tags$td(style = "font-weight:700; font-size:15px; color:#1E293B;", p$total_home_runs),
             tags$td(tags$span(class = "mlb-badge", mlb_abbr)),
-            tags$td(pos_badge),
-            tags$td(style = hr_style, p$total_home_runs),
-            tags$td(style = "width:46px;", pos_rk_pill),
+            tags$td(style = "width:40px;", pos_rk_pill),
+            tags$td(avg_dist_val),
             tags$td(day_cell),
             tags$td(p$past7_hr),
             tags$td(p$past30_hr)

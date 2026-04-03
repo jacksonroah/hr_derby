@@ -1,13 +1,13 @@
 player_name,team_name,position,mlb_team
-Pete Alonso,Jackson,1B,NYM
+Pete Alonso,Jackson,1B,BAL
 Ketel Marte,Jackson,2B,ARI
-Brent Rooker,Jackson,OF,OAK
-Fernando Tatis Jr.,Jackson,OF,SDP
-Munetaka Murakami,Jackson,3B,NYM
+Brent Rooker,Jackson,OF,SAC
+Fernando Tatis,Jackson,OF,SDP
+Munetaka Murakami,Jackson,3B,CHW
 Spencer Torkelson,Jackson,UTL,DET
 Hunter Goodman,Jackson,C,COL
 Seiya Suzuki,Jackson,BENCH,CHC
-Willy Adames,Jackson,SS,SF
+Willy Adames,Jackson,SS,SFG
 Jac Caglianone,Jackson,OF,KCR
 
 Zach Neto,Alex,SS,LAA
@@ -16,7 +16,7 @@ Austin Riley,Alex,UTL,ATL
 James Wood,Alex,OF,WSH
 Riley Greene,Alex,OF,DET
 Brice Turang,Alex,2B,MIL
-Tyler Soderstrom,Alex,1B,OAK
+Tyler Soderstrom,Alex,1B,SAC
 Wyatt Langford,Alex,BENCH,TEX
 Logan O'Hoppe,Alex,C,LAA
 Junior Caminero,Alex,3B,TBR
@@ -30,7 +30,7 @@ Teoscar Hernandez,Brusick,OF,LAD
 Michael Busch,Brusick,1B,CHC
 Marcus Semien,Brusick,2B,TEX
 Jose Ramirez,Brusick,3B,CLE
-Carson Montgomery,Brusick,BENCH,TEX
+Colson Montgomery,Brusick,BENCH,CHW
 
 Shohei Ohtani,Jason,UTL,LAD
 Julio Rodriguez,Jason,OF,SEA
@@ -43,8 +43,8 @@ Maikel Garcia,Jason,3B,KCR
 Nico Hoerner,Jason,2B,CHC
 Trea Turner,Jason,BENCH,PHI
 
-Nick Kurtz,Kirk,1B,OAK
-Jazz Chisholm Jr.,Kirk,2B,NYY
+Nick Kurtz,Kirk,1B,SAC
+Jazz Chisholm,Kirk,2B,NYY
 Dansby Swanson,Kirk,SS,CHC
 Jo Adell,Kirk,OF,LAA
 Ben Rice,Kirk,C,NYY
@@ -56,23 +56,23 @@ Kyle Schwarber,Kirk,UTL,PHI
 
 Bobby Witt Jr.,Tyler,SS,KCR
 Matt Olson,Tyler,1B,ATL
-Kyle Tucker,Tyler,OF,CHC
+Kyle Tucker,Tyler,OF,LAD
 Pete Crow-Armstrong,Tyler,OF,CHC
 Max Muncy,Tyler,3B,LAD
 Will Smith,Tyler,C,LAD
-Josh Naylor,Tyler,UTL,CLE
+Josh Naylor,Tyler,UTL,SEA
 Jackson Holliday,Tyler,2B,BAL
-Bo Bichette,Tyler,BENCH,TOR
+Bo Bichette,Tyler,BENCH,NYM
 Juan Soto,Tyler,OF,NYM
 
 Cal Raleigh,Derek,C,SEA
 Corey Seager,Derek,SS,TEX
 Vinnie Pasquantino,Derek,1B,KCR
-Eugenio Suarez,Derek,3B,ARI
+Eugenio Suarez,Derek,3B,CIN
 Giancarlo Stanton,Derek,OF,NYY
 Jose Altuve,Derek,2B,HOU
 Mike Trout,Derek,OF,LAA
-Adolis Garcia,Derek,OF,TEX
+Adolis Garcia,Derek,OF,PHI
 Christian Yelich,Derek,UTL,MIL
 George Springer,Derek,BENCH,TOR
 
@@ -80,9 +80,9 @@ Aaron Judge,Maddox,OF,NYY
 Elly De La Cruz,Maddox,SS,CIN
 Mookie Betts,Maddox,UTL,LAD
 Vladimir Guerrero Jr.,Maddox,1B,TOR
-Rafael Devers,Maddox,BENCH,BOS
+Rafael Devers,Maddox,BENCH,SFG
 Manny Machado,Maddox,3B,SDP
 Byron Buxton,Maddox,OF,MIN
 Salvador Perez,Maddox,C,KCR
 Cody Bellinger,Maddox,OF,NYY
-Brandon Lowe,Maddox,2B,TBR
+Brandon Lowe,Maddox,2B,PIT
