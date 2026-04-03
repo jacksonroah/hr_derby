@@ -106,11 +106,16 @@ ui <- fluidPage(
       }
 
       .standings-title {
-        font-size: 16px;
+        font-size: 21px;
         font-weight: 800;
         letter-spacing: -0.3px;
-        line-height: 1;
-        white-space: nowrap;
+        line-height: 1.15;
+      }
+
+      .header-left {
+        flex: 1;
+        min-width: 0;
+        padding-right: 10px;
       }
 
       .header-totals { text-align: right; }
@@ -150,8 +155,7 @@ ui <- fluidPage(
       /* Team row */
       .standings-team-row {
         display: flex;
-        align-items: center;
-        padding: 11px 14px;
+        align-items: stretch;
         border-bottom: 1px solid rgba(0,0,0,0.05);
       }
 
@@ -227,6 +231,7 @@ ui <- fluidPage(
         flex-shrink: 0;
         border-radius: 2px;
         margin: 0 10px;
+        align-self: center;
       }
 
       /* Split-side layout for standings rows */

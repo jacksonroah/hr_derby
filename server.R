@@ -193,7 +193,8 @@ server <- function(input, output, session) {
 
     lb <- lb_result$leaderboard
 
-    recent <- recent_team_stats()
+    recent   <- recent_team_stats()
+    recent_p <- recent_player_stats()
     if (!is.null(recent)) {
       lb <- lb %>%
         left_join(recent, by = "team_name") %>%
@@ -290,7 +291,7 @@ server <- function(input, output, session) {
       squad <- if (!is.null(tinfo$squad_name) && nchar(tinfo$squad_name) > 0) tinfo$squad_name else NULL
 
       tie_note <- if (is_tied[i] && has_dist && !is.na(row$avg_distance) && row$avg_distance > 0) {
-        tags$span(class = "tie-note", paste0("Avg HR: ", round(row$avg_distance), " ft"))
+        tags$span(class = "tie-note", paste0("Avg: ", round(row$avg_distance), " ft"))
       } else NULL
 
       color_bg   <- paste0("background:", tinfo$primary_color, ";")
@@ -317,6 +318,28 @@ server <- function(input, output, session) {
         paste0("background:", tinfo$primary_color, "; color:", tinfo$text_color, ";")
       }
 
+      # Today's scorers for this team
+      today_scorers_row <- NULL
+      if (!is.null(recent_p)) {
+        tp_today <- recent_p[recent_p$team_name == team & recent_p$today_hr > 0, ]
+        if (nrow(tp_today) > 0) {
+          names_fmt <- mapply(function(nm, hr_count) {
+            parts <- strsplit(trimws(nm), "\\s+")[[1]]
+            short <- if (length(parts) <= 1) nm else
+              paste0(substr(parts[1], 1, 1), ". ", paste(parts[-1], collapse = " "))
+            flair <- if (hr_count == 2) " (2) DOUBLE BANG" else
+                     if (hr_count == 3) " (3) OH BABY A TRIPLE" else
+                     if (hr_count >= 4) paste0(" (", hr_count, ") GOAT MODE") else ""
+            paste0(short, flair)
+          }, tp_today$player_name, tp_today$today_hr, SIMPLIFY = TRUE)
+          today_scorers_row <- div(
+            style = "font-size: 11px; line-height: 1.3; padding-top: 3px;",
+            tags$span(style = "font-weight: 700; color: #16A34A;", "Today: "),
+            tags$span(style = "color: #1E293B;", paste(names_fmt, collapse = ", "))
+          )
+        }
+      }
+
       div(class = "standings-team-row", style = "background:white; padding:0; overflow:hidden;",
         # Left side
         div(class = "sr-left", style = left_style,
@@ -332,18 +355,22 @@ server <- function(input, output, session) {
         # Divider
         div(class = "col-divider-bar",
             style = paste0("background:", divider_color, ";")),
-        # Right side
-        div(class = "sr-right", style = right_style,
-          div(class = "sr-total", style = right_text_style,
-            div(class = "sr-total-nums",
-              tags$span(style = "font-size:22px; font-weight:700;", row$team_total),
-              tags$span(class = "sr-hr-unit", "HR")
+        # Right side — column so scorers slot in below numbers
+        div(class = "sr-right",
+            style = paste0(right_style, " flex-direction:column; align-items:flex-start; justify-content:center;"),
+          div(style = "display:flex; align-items:center;",
+            div(class = "sr-total", style = right_text_style,
+              div(class = "sr-total-nums",
+                tags$span(style = "font-size:22px; font-weight:700;", row$team_total),
+                tags$span(class = "sr-hr-unit", "HR")
+              ),
+              tie_note
             ),
-            tie_note
+            div(class = "sr-day", style = right_text_style, day_content),
+            div(class = "sr-week", style = right_text_style, row$past7_hr),
+            div(class = "sr-month", style = right_text_style, row$past30_hr)
           ),
-          div(class = "sr-day", style = right_text_style, day_content),
-          div(class = "sr-week", style = right_text_style, row$past7_hr),
-          div(class = "sr-month", style = right_text_style, row$past30_hr)
+          today_scorers_row
         )
       )
     })
