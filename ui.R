@@ -54,12 +54,12 @@ ui <- fluidPage(
 
       .banner-nav {
         display: flex;
-        gap: 4px;
+        gap: 2px;
         flex-shrink: 0;
       }
 
       .nav-pill {
-        padding: 5px 9px;
+        padding: 4px 8px;
         border-radius: 20px;
         font-size: 11px;
         font-weight: 600;
@@ -226,12 +226,12 @@ ui <- fluidPage(
       /* Divider column — change background to adjust divider color */
       .col-divider-bar {
         width: 3px;
-        height: 32px;
+        min-height: 32px;
         background: black;
         flex-shrink: 0;
         border-radius: 2px;
         margin: 0 10px;
-        align-self: center;
+        align-self: stretch;
       }
 
       /* Split-side layout for standings rows */
@@ -248,6 +248,7 @@ ui <- fluidPage(
         align-items: center;
         padding: 11px 14px 11px 0;
         flex-shrink: 0;
+        width: 165px;
       }
 
       /* Stats columns — narrowed ~12px total to give name column more room */
@@ -537,7 +538,7 @@ ui <- fluidPage(
       }
 
       .roster-table th:nth-child(1) { width: 18px; padding: 6px 1px; }
-      .roster-table th:nth-child(3) { text-align: left; padding-left: 6px; }
+      .roster-table th:nth-child(4) { text-align: left; padding-left: 6px; }
 
       .roster-table td {
         padding: 6px 2px;
@@ -548,7 +549,7 @@ ui <- fluidPage(
       }
 
       .roster-table td:nth-child(1) { width: 18px; padding: 6px 1px; font-size: 11px; }
-      .roster-table td:nth-child(3) { text-align: left; padding-left: 6px; font-size: 13px; }
+      .roster-table td:nth-child(4) { text-align: left; padding-left: 6px; font-size: 13px; }
 
       /* Bench player row — greyed out with separator line */
       .bench-row { border-top: 2px solid #475569; opacity: 0.45; }
@@ -584,6 +585,73 @@ ui <- fluidPage(
         text-align: center;
         white-space: nowrap;
         line-height: 1.2;
+      }
+
+      /* Players controls — vertical pill stacks */
+      .players-controls-right {
+        align-items: flex-start;
+      }
+
+      .pill-col {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      /* Position filter bubble row */
+      .pos-filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        margin-top: 2px;
+        max-width: 130px;
+      }
+
+      .pos-filter-btn {
+        padding: 3px 7px !important;
+        border-radius: 8px !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        border: none !important;
+        cursor: pointer !important;
+        outline: none !important;
+        box-shadow: none !important;
+        opacity: 0.4;
+        transition: opacity 0.15s;
+      }
+
+      .pos-filter-btn.active-pos-filter {
+        opacity: 1;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.18) !important;
+      }
+
+      /* Players table — column sizing: MLB, PLAYER, POS, TEAM, HR, 7D, 30D */
+      .players-table th:nth-child(1),
+      .players-table td:nth-child(1) { width: 38px; padding: 6px 2px; }
+      .players-table th:nth-child(2),
+      .players-table td:nth-child(2) { text-align: left !important; padding-left: 6px !important;
+                                        white-space: nowrap; min-width: 130px; }
+      .players-table th:nth-child(3),
+      .players-table td:nth-child(3) { text-align: center !important; padding-left: 2px !important; }
+      .players-table th:nth-child(4),
+      .players-table td:nth-child(4) { width: 38px; text-align: center !important; padding-left: 2px !important; }
+      .players-table th:nth-child(5),
+      .players-table td:nth-child(5) { width: 46px; text-align: center; }
+
+      /* Players tab — derby team badge */
+      .player-derby-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+
+      /* Players tab — multiple pos badges in one cell */
+      .pos-badges-cell {
+        white-space: nowrap;
       }
 
       /* Position rank — pill shape to fit ordinals */
@@ -770,7 +838,7 @@ ui <- fluidPage(
     # -----------------------------------------------------------------------
     tags$script(HTML("
       function switchTab(tab) {
-        ['standings', 'rosters', 'position'].forEach(function(t) {
+        ['standings', 'rosters', 'players', 'position'].forEach(function(t) {
           document.getElementById('tab-' + t).style.display = (t === tab) ? 'block' : 'none';
           var pill = document.getElementById('nav-' + t);
           if (pill) { pill.classList.toggle('active', t === tab); }
@@ -804,6 +872,34 @@ ui <- fluidPage(
           if (!el) return;
           if ((id === 'sort_by_hr' && msg.active === 'hr') ||
               (id === 'sort_by_position' && msg.active === 'position')) {
+            el.classList.add('active-sort');
+          } else {
+            el.classList.remove('active-sort');
+          }
+        });
+      });
+
+      // Players tab — HR sort button
+      Shiny.addCustomMessageHandler('updatePlayersButtons', function(msg) {
+        var hrBtn = document.getElementById('players_sort_hr');
+        if (hrBtn) hrBtn.classList.toggle('active-sort', msg.active === 'hr');
+      });
+
+      // Players tab — position filter bubbles
+      Shiny.addCustomMessageHandler('updatePlayersPosFilter', function(msg) {
+        ['OF','1B','2B','3B','SS','C','UTL'].forEach(function(pos) {
+          var el = document.getElementById('players_pos_' + pos);
+          if (!el) return;
+          el.classList.toggle('active-pos-filter', msg.active === pos);
+        });
+      });
+
+      Shiny.addCustomMessageHandler('updatePlayersFilter', function(msg) {
+        ['players_filter_available', 'players_filter_all'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          if ((id === 'players_filter_available' && msg.active === 'available') ||
+              (id === 'players_filter_all' && msg.active === 'all')) {
             el.classList.add('active-sort');
           } else {
             el.classList.remove('active-sort');
@@ -845,8 +941,10 @@ ui <- fluidPage(
                     onclick = "switchTab('standings')", "League"),
         tags$button(class = "nav-pill", id = "nav-rosters",
                     onclick = "switchTab('rosters')", "Rosters"),
+        tags$button(class = "nav-pill", id = "nav-players",
+                    onclick = "switchTab('players')", "Players"),
         tags$button(class = "nav-pill", id = "nav-position",
-                    onclick = "switchTab('position')", "Position Ranks")
+                    onclick = "switchTab('position')", "Rankings")
       )
     ),
 
@@ -877,7 +975,40 @@ ui <- fluidPage(
       uiOutput("team_roster_cards")
     ),
 
-    # ---- Tab 3: By Position ------------------------------------------------
+    # ---- Tab 3: Players (all MLB players w/ HRs + position eligibility) ----
+    div(id = "tab-players", class = "tab-pane", style = "display:none;",
+      div(class = "rosters-controls",
+        div(class = "controls-left",
+          tags$span(class = "controls-title", "Players"),
+          tags$span(class = "controls-hint", "Sorted by home runs")
+        ),
+        div(class = "controls-right players-controls-right",
+          div(class = "pill-col",
+            actionButton("players_sort_hr", "Sort by Total HR", class = "sort-pill active-sort"),
+            div(class = "pos-filter-row",
+              tagList(lapply(c("OF","1B","2B","3B","SS","C","UTL"), function(pos) {
+                pi  <- CONFIG$positions[[pos]]
+                lbl <- if (pos == "UTL") "UT" else pos
+                sty <- if (!is.null(pi))
+                  paste0("background:", pi$bg_color, " !important; color:", pi$text_color, " !important;")
+                else
+                  "background:#F9FAFB !important; color:#6B7280 !important;"
+                actionButton(paste0("players_pos_", pos), lbl,
+                             class = "pos-filter-btn", style = sty)
+              }))
+            )
+          ),
+          tags$span(class = "ctrl-sep", "|"),
+          div(class = "pill-col",
+            actionButton("players_filter_all",       "All Players",    class = "sort-pill active-sort"),
+            actionButton("players_filter_available", "Available Only", class = "sort-pill")
+          )
+        )
+      ),
+      uiOutput("players_tab_view")
+    ),
+
+    # ---- Tab 4: By Position ------------------------------------------------
     div(id = "tab-position", class = "tab-pane", style = "display:none;",
       div(class = "pos-view-controls",
         actionButton("pos_show_rank", "Position Rank", class = "pos-view-pill active-pos"),

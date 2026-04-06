@@ -13,6 +13,7 @@ options(viewer = NULL, shiny.launch.browser = TRUE)
 CACHE_DIR      <- "cache"
 CACHE_HR_FILE  <- file.path(CACHE_DIR, "hr_data.rds")
 CACHE_API_FILE <- file.path(CACHE_DIR, "total_api_hrs.rds")
+CACHE_RAW_FILE <- file.path(CACHE_DIR, "raw_api_data.rds")
 dir.create(CACHE_DIR, showWarnings = FALSE)
 
 # Ordinal suffix: 1 -> "1st", 2 -> "2nd", etc.
@@ -68,6 +69,7 @@ server <- function(input, output, session) {
   # Load from disk cache so standings display immediately on reload
   hr_data       <- reactiveVal(if (file.exists(CACHE_HR_FILE))  readRDS(CACHE_HR_FILE)  else NULL)
   total_api_hrs <- reactiveVal(if (file.exists(CACHE_API_FILE)) readRDS(CACHE_API_FILE) else 0L)
+  raw_api_data  <- reactiveVal(if (file.exists(CACHE_RAW_FILE)) readRDS(CACHE_RAW_FILE) else NULL)
 
   # ---- API polling --------------------------------------------------------
   # Single GET per cycle; on error keeps old hr_data so UI never blanks out.
@@ -83,6 +85,11 @@ server <- function(input, output, session) {
 
       raw_content <- httr::content(raw_response, "text", encoding = "UTF-8")
       data        <- jsonlite::fromJSON(raw_content)
+      if (is.data.frame(data)) {
+        raw_api_data(data)
+        tryCatch(saveRDS(data, CACHE_RAW_FILE),
+                 error = function(e) warning("Raw cache write failed: ", e$message))
+      }
       processed   <- process_data(data, drafted_players)
 
       if (!is.null(processed) && nrow(processed) > 0) {
@@ -175,6 +182,94 @@ server <- function(input, output, session) {
   observeEvent(input$pos_show_hr, {
     pos_view_mode("hr")
     session$sendCustomMessage("updatePosButtons", list(active = "hr"))
+  })
+
+  # ---- Players tab state ---------------------------------------------------
+  players_sort_mode <- reactiveVal("hr")
+  players_show_all  <- reactiveVal(TRUE)
+
+  observeEvent(input$players_sort_hr, {
+    players_sort_mode("hr")
+    session$sendCustomMessage("updatePlayersButtons",   list(active = "hr"))
+    session$sendCustomMessage("updatePlayersPosFilter", list(active = "none"))
+  })
+
+  for (.pos in c("OF", "1B", "2B", "3B", "SS", "C", "UTL")) {
+    local({
+      p <- .pos
+      observeEvent(input[[paste0("players_pos_", p)]], {
+        players_sort_mode(p)
+        session$sendCustomMessage("updatePlayersButtons",   list(active = "none"))
+        session$sendCustomMessage("updatePlayersPosFilter", list(active = p))
+      }, ignoreInit = TRUE)
+    })
+  }
+
+  observeEvent(input$players_filter_available, {
+    players_show_all(FALSE)
+    session$sendCustomMessage("updatePlayersFilter", list(active = "available"))
+  })
+
+  observeEvent(input$players_filter_all, {
+    players_show_all(TRUE)
+    session$sendCustomMessage("updatePlayersFilter", list(active = "all"))
+  })
+
+  # ---- Players tab data ----------------------------------------------------
+  player_positions_data <- reactive({
+    path <- file.path(CACHE_DIR, "player_positions.csv")
+    if (file.exists(path)) {
+      tryCatch(read.csv(path, stringsAsFactors = FALSE), error = function(e) NULL)
+    } else NULL
+  })
+
+  all_player_hr_stats <- reactive({
+    raw <- raw_api_data()
+    if (is.null(raw)) return(NULL)
+    calculate_all_player_hr_stats(raw)
+  })
+
+  players_tab_data <- reactive({
+    hr_stats  <- all_player_hr_stats()
+    positions <- player_positions_data()
+
+    if (is.null(hr_stats) || nrow(hr_stats) == 0) return(NULL)
+
+    hr_stats$norm_name <- sapply(hr_stats$player_name, normalize_name)
+
+    # Attach position + MLB team from positions CSV
+    if (!is.null(positions) && nrow(positions) > 0) {
+      positions$norm_name <- sapply(positions$player_name, normalize_name)
+      keep <- intersect(c("norm_name", "mlb_team", "positions", "primary_position"),
+                        names(positions))
+      hr_stats <- hr_stats %>%
+        left_join(positions[, keep], by = "norm_name")
+    } else {
+      hr_stats$mlb_team        <- NA_character_
+      hr_stats$positions       <- NA_character_
+      hr_stats$primary_position <- NA_character_
+    }
+
+    # Attach derby team from roster (and fill mlb_team from roster if missing)
+    roster_info <- drafted_players %>%
+      mutate(norm_name = sapply(player_name, normalize_name)) %>%
+      filter(position != "BENCH") %>%
+      select(norm_name, derby_team = team_name, roster_mlb = mlb_team) %>%
+      distinct()
+
+    hr_stats <- hr_stats %>%
+      left_join(roster_info, by = "norm_name") %>%
+      mutate(
+        mlb_team = ifelse(is.na(mlb_team) & !is.na(roster_mlb), roster_mlb, mlb_team)
+      ) %>%
+      select(-norm_name, -roster_mlb)
+
+    # Players excluded from the display (e.g. too many positions that break layout)
+    EXCLUDED_PLAYERS <- c("Mauricio Dubon")
+    hr_stats <- hr_stats %>%
+      filter(!player_name %in% EXCLUDED_PLAYERS)
+
+    hr_stats
   })
 
   # =========================================================================
@@ -543,9 +638,9 @@ server <- function(input, output, session) {
           style = paste0("background:", sub_header_bg, ";"),
           tags$th("RK"),
           tags$th("POS"),
+          tags$th("MLB"),
           tags$th("PLAYER"),
           tags$th("TOTAL HR"),
-          tags$th("MLB"),
           tags$th(style = "width:40px;", "POS RK"),
           tags$th("AVG DIST"),
           tags$th("DAY"),
@@ -615,9 +710,9 @@ server <- function(input, output, session) {
             style = paste0("background:", row_bg_uniform, ";"),
             tags$td(style = "font-size:11px;", j),
             tags$td(pos_badge_display),
+            tags$td(tags$span(class = "mlb-badge", mlb_abbr)),
             tags$td(style = "text-align:left; font-weight:700;", p$player_name),
             tags$td(style = "font-weight:700; font-size:15px; color:#1E293B;", p$total_home_runs),
-            tags$td(tags$span(class = "mlb-badge", mlb_abbr)),
             tags$td(style = "width:40px;", pos_rk_pill),
             tags$td(avg_dist_val),
             tags$td(day_cell),
@@ -742,6 +837,138 @@ server <- function(input, output, session) {
   })
 
   outputOptions(output, "position_grid", suspendWhenHidden = FALSE)
+
+  # =========================================================================
+  # Tab 4 — Players (all MLB players w/ HRs, position eligibility)
+  # =========================================================================
+  output$players_tab_view <- renderUI({
+    data     <- players_tab_data()
+    show_all <- isTRUE(players_show_all())
+    sort_mode <- players_sort_mode()
+
+    if (is.null(data) || nrow(data) == 0) {
+      pos_path <- file.path(CACHE_DIR, "player_positions.csv")
+      if (!file.exists(pos_path)) {
+        return(div(class = "loading-msg",
+          "Run ", tags$code("Rscript scrape_positions.R"),
+          " to populate player positions, then reload."))
+      }
+      return(div(class = "loading-msg", "Loading player data..."))
+    }
+
+    # Filter: available only (not on any derby roster)
+    if (!show_all) {
+      data <- data %>% filter(is.na(derby_team))
+    }
+
+    if (nrow(data) == 0) {
+      return(div(class = "loading-msg",
+        "No available players found. Try switching to \"All Players\"."))
+    }
+
+    # Sort / filter by position or HR
+    pos_filter_values <- c("OF", "1B", "2B", "3B", "SS", "C", "UTL")
+    if (sort_mode %in% pos_filter_values) {
+      data <- data %>%
+        filter(
+          (!is.na(positions) & grepl(sort_mode, positions, fixed = TRUE)) |
+          (!is.na(primary_position) & primary_position == sort_mode)
+        ) %>%
+        arrange(desc(total_hr))
+    } else {
+      data <- data %>% arrange(desc(total_hr))
+    }
+
+    # Cap display at 300 rows for performance
+    data <- head(data, 300)
+
+    make_pos_badges <- function(positions_str, primary_pos) {
+      if (!is.na(positions_str) && nchar(positions_str) > 0) {
+        pos_list <- trimws(strsplit(positions_str, ",")[[1]])
+      } else if (!is.na(primary_pos) && nchar(primary_pos) > 0) {
+        pos_list <- primary_pos
+      } else {
+        return(list(tags$span(class = "em-dash", "\u2014")))
+      }
+      # When filtering by a position, show that position's badge first
+      if (sort_mode %in% pos_filter_values && sort_mode %in% pos_list) {
+        pos_list <- c(sort_mode, pos_list[pos_list != sort_mode])
+      }
+      lapply(pos_list, function(pos) {
+        pos_info    <- CONFIG$positions[[pos]]
+        display_pos <- if (pos == "UTL") "UT" else pos
+        if (!is.null(pos_info)) {
+          tags$span(class = "pos-badge",
+            style = paste0("background:", pos_info$bg_color,
+                           "; color:", pos_info$text_color, ";"),
+            display_pos)
+        } else {
+          tags$span(class = "pos-badge",
+            style = "background:#F1F5F9; color:#64748B;",
+            display_pos)
+        }
+      })
+    }
+
+    rows <- lapply(seq_len(nrow(data)), function(i) {
+      p <- data[i, ]
+
+      pos_badges <- make_pos_badges(
+        if ("positions"        %in% names(p)) p$positions        else NA,
+        if ("primary_position" %in% names(p)) p$primary_position else NA
+      )
+
+      mlb_cell <- if (!is.na(p$mlb_team) && nchar(p$mlb_team) > 0) {
+        tags$span(class = "mlb-badge", p$mlb_team)
+      } else {
+        tags$span(class = "em-dash", "\u2014")
+      }
+
+      derby_cell <- if (!is.na(p$derby_team)) {
+        tinfo <- CONFIG$teams$team_info[[p$derby_team]]
+        if (!is.null(tinfo)) {
+          tags$span(class = "player-derby-badge",
+            style = paste0("background:", tinfo$primary_color,
+                           "; color:", tinfo$text_color, ";"),
+            tinfo$abbr)
+        } else {
+          tags$span(style = "color:#64748B; font-size:11px;", p$derby_team)
+        }
+      } else {
+        tags$span(class = "em-dash", "\u2014")
+      }
+
+      tags$tr(
+        tags$td(mlb_cell),
+        tags$td(style = "text-align:left; font-weight:700;", p$player_name),
+        tags$td(class = "pos-badges-cell", pos_badges),
+        tags$td(derby_cell),
+        tags$td(style = "font-weight:700; font-size:15px; color:#1E293B; text-align:center;",
+                p$total_hr),
+        tags$td(p$past7_hr),
+        tags$td(p$past30_hr)
+      )
+    })
+
+    header <- tags$tr(
+      style = "background:#F1F5F9;",
+      tags$th("MLB"),
+      tags$th(style = "text-align:left;", "PLAYER"),
+      tags$th("POS"),
+      tags$th("TEAM"),
+      tags$th("HR"),
+      tags$th("7D"),
+      tags$th("30D")
+    )
+
+    div(class = "roster-table-wrapper", style = "padding: 0 10px;",
+      tags$table(class = "roster-table players-table",
+        tags$thead(header),
+        tags$tbody(rows)
+      )
+    )
+  })
+  outputOptions(output, "players_tab_view", suspendWhenHidden = FALSE)
 
   # =========================================================================
   # Cumulative HR graph — tiny y-offset per team so tied lines separate

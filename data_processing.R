@@ -413,3 +413,39 @@ prepare_cumulative_data <- function(data) {
 
   return(cumulative_data)
 }
+
+# ---------------------------------------------------------------------------
+# HR stats for ALL batters in raw API data — no roster filtering.
+# Used by the Players tab to show every MLB player with HRs this season.
+# ---------------------------------------------------------------------------
+calculate_all_player_hr_stats <- function(raw_data) {
+  if (is.null(raw_data)) return(NULL)
+  if (!is.data.frame(raw_data)) {
+    tryCatch({ raw_data <- as.data.frame(raw_data) }, error = function(e) return(NULL))
+  }
+  if (nrow(raw_data) == 0) return(NULL)
+  if (!all(c("batter_name", "date") %in% names(raw_data))) return(NULL)
+
+  # Apply the same Max Muncy dedup as process_data
+  if ("batter" %in% names(raw_data)) {
+    raw_data <- raw_data %>%
+      filter(!(batter_name == "Max Muncy" & batter == "691777"))
+  }
+
+  raw_data$date <- as.Date(raw_data$date)
+
+  today     <- get_today_pst()
+  week_ago  <- today - 7
+  month_ago <- today - 30
+
+  raw_data %>%
+    group_by(batter_name) %>%
+    summarise(
+      total_hr  = n(),
+      past7_hr  = sum(date >= week_ago),
+      past30_hr = sum(date >= month_ago),
+      .groups = "drop"
+    ) %>%
+    rename(player_name = batter_name) %>%
+    arrange(desc(total_hr))
+}
