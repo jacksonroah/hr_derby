@@ -309,6 +309,12 @@ server <- function(input, output, session) {
       arrange(desc(team_total), desc(coalesce(avg_distance, 0))) %>%
       mutate(rank = row_number())
 
+    # Trigger GOAT MODE if any player hit 4+ HRs today
+    if (!is.null(recent_p) && "today_hr" %in% names(recent_p)) {
+      goat_active <- any(recent_p$today_hr >= 4, na.rm = TRUE)
+      session$sendCustomMessage("goatMode", list(active = goat_active))
+    }
+
     # Mark tied positions for tiebreaker note
     totals  <- lb$team_total
     n_teams <- nrow(lb)
@@ -418,19 +424,28 @@ server <- function(input, output, session) {
       if (!is.null(recent_p)) {
         tp_today <- recent_p[recent_p$team_name == team & recent_p$today_hr > 0, ]
         if (nrow(tp_today) > 0) {
-          names_fmt <- mapply(function(nm, hr_count) {
+          player_lines <- mapply(function(nm, hr_count) {
             parts <- strsplit(trimws(nm), "\\s+")[[1]]
             short <- if (length(parts) <= 1) nm else
               paste0(substr(parts[1], 1, 1), ". ", paste(parts[-1], collapse = " "))
-            flair <- if (hr_count == 2) " (2) DOUBLE BANG" else
-                     if (hr_count == 3) " (3) OH BABY A TRIPLE" else
-                     if (hr_count >= 4) paste0(" (", hr_count, ") GOAT MODE") else ""
-            paste0(short, flair)
-          }, tp_today$player_name, tp_today$today_hr, SIMPLIFY = TRUE)
+            badge_color <- if (hr_count >= 4) "#7C3AED" else "#DC2626"
+            flair_text  <- if (hr_count == 2) "BANG BANG" else
+                           if (hr_count == 3) "OH BABY A TRIPLE" else
+                           if (hr_count >= 4) "THATS WHY HES THE GOAT" else ""
+            badge <- if (hr_count >= 2) {
+              tags$span(style = paste0("margin-left:4px; background:", badge_color, "; color:white; border-radius:3px; padding:0 3px; font-size:10px; font-weight:700;"),
+                paste0("\u00d7", hr_count))
+            } else NULL
+            flair <- if (nchar(flair_text) > 0) {
+              tags$span(style = "margin-left:4px; font-weight:700; color:#DC2626; font-size:10px;", flair_text)
+            } else NULL
+            div(style = "display:flex; align-items:center; color:#1E293B; padding-left:2px;",
+              tags$span(short), badge, flair)
+          }, tp_today$player_name, tp_today$today_hr, SIMPLIFY = FALSE)
           today_scorers_row <- div(
-            style = "font-size: 11px; line-height: 1.3; padding-top: 3px;",
-            tags$span(style = "font-weight: 700; color: #16A34A;", "Today: "),
-            tags$span(style = "color: #1E293B;", paste(names_fmt, collapse = ", "))
+            style = "font-size: 11px; line-height: 1.4; padding-top: 3px;",
+            tags$span(style = "font-weight: 700; color: #16A34A;", "Today:"),
+            tagList(player_lines)
           )
         }
       }

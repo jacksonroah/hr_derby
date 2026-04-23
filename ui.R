@@ -806,6 +806,19 @@ ui <- fluidPage(
 
       @keyframes ld-spin { to { transform: rotate(360deg); } }
 
+      @keyframes goat-flash {
+        0%   { background-color: #FF0000; }
+        14%  { background-color: #FF7F00; }
+        28%  { background-color: #FFD700; }
+        42%  { background-color: #00CC44; }
+        57%  { background-color: #0088FF; }
+        71%  { background-color: #8B00FF; }
+        85%  { background-color: #FF1493; }
+        100% { background-color: #FF0000; }
+      }
+      body.goat-mode { animation: goat-flash 0.4s linear infinite; }
+      body.goat-mode * { color: white !important; text-shadow: 0 0 6px rgba(0,0,0,0.6); }
+
       /* Suppress Shiny's recalculating dim/spinner so UI never flashes on poll */
       .recalculating { opacity: 1 !important; transition: none !important; }
       .shiny-busy-indicator { display: none !important; }
@@ -905,6 +918,14 @@ ui <- fluidPage(
             el.classList.remove('active-sort');
           }
         });
+      });
+
+      Shiny.addCustomMessageHandler('goatMode', function(msg) {
+        if (msg.active) {
+          document.body.classList.add('goat-mode');
+        } else {
+          document.body.classList.remove('goat-mode');
+        }
       });
 
       // Hide loading overlay once the standings table first renders

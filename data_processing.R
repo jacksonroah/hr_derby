@@ -449,3 +449,4 @@ calculate_all_player_hr_stats <- function(raw_data) {
     rename(player_name = batter_name) %>%
     arrange(desc(total_hr))
 }
+
