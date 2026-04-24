@@ -2,11 +2,11 @@ player_name,team_name,position,mlb_team
 Pete Alonso,Jackson,1B,BAL
 Ketel Marte,Jackson,2B,ARI
 Brent Rooker,Jackson,OF,SAC
-Fernando Tatis,Jackson,OF,SDP
+Fernando Tatis,Jackson,BENCH,SDP
 Munetaka Murakami,Jackson,3B,CHW
 Spencer Torkelson,Jackson,UTL,DET
 Hunter Goodman,Jackson,C,COL
-Seiya Suzuki,Jackson,BENCH,CHC
+Seiya Suzuki,Jackson,OF,CHC
 Willy Adames,Jackson,SS,SFG
 Jac Caglianone,Jackson,OF,KCR
 
@@ -35,7 +35,7 @@ Colson Montgomery,Brusick,BENCH,CHW
 Shohei Ohtani,Jason,UTL,LAD
 Julio Rodriguez,Jason,OF,SEA
 Francisco Lindor,Jason,SS,NYM
-Jackson Chourio,Jason,OF,MIL
+Jordan Walker,Jason,OF,STL
 Bryce Harper,Jason,1B,PHI
 Corbin Carroll,Jason,OF,ARI
 William Contreras,Jason,C,MIL

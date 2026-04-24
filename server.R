@@ -136,6 +136,71 @@ server <- function(input, output, session) {
     prepare_cumulative_data(hr_data())
   })
 
+  # Bench player HR counts for display-only (not counted toward team totals).
+  # Joins raw API data directly to bench players, bypassing the bench filter in process_data.
+  bench_player_hrs <- reactive({
+    raw <- raw_api_data()
+    if (is.null(raw) || nrow(raw) == 0 || !"batter_name" %in% names(raw)) return(NULL)
+    bench_players <- drafted_players %>% filter(position == "BENCH")
+    if (nrow(bench_players) == 0) return(NULL)
+    bench_players$normalized_name <- sapply(bench_players$player_name, normalize_name)
+    raw_norm <- data.frame(
+      raw_player_name = raw$batter_name,
+      normalized_name = sapply(raw$batter_name, normalize_name),
+      stringsAsFactors = FALSE
+    )
+    raw_norm %>%
+      inner_join(bench_players %>% select(normalized_name, player_name, team_name),
+                 by = "normalized_name") %>%
+      group_by(team_name, player_name) %>%
+      summarise(bench_hr = n(), .groups = "drop")
+  })
+
+  # HR stats for the dropped player (player_out) in each golden swap.
+  # Displayed below bench for comparison — total, today, 7d, 30d.
+  golden_swap_hrs <- reactive({
+    raw <- raw_api_data()
+    if (is.null(raw) || nrow(raw) == 0 || !"batter_name" %in% names(raw)) return(NULL)
+    if (nrow(golden_swaps) == 0) return(NULL)
+    today_dt  <- get_today_pst()
+    gs <- golden_swaps
+    gs$normalized_name <- sapply(gs$player_out, normalize_name)
+    raw_df <- data.frame(
+      normalized_name = sapply(raw$batter_name, normalize_name),
+      date = as.Date(raw$date),
+      stringsAsFactors = FALSE
+    )
+    matched <- raw_df %>%
+      inner_join(gs %>% select(normalized_name, team_name, player_out),
+                 by = "normalized_name") %>%
+      rename(player_name = player_out)
+    if (nrow(matched) == 0) return(NULL)
+    total_hrs <- matched %>%
+      group_by(team_name, player_name) %>%
+      summarise(gs_hr = n(), .groups = "drop")
+    today_hrs <- matched %>%
+      filter(date >= today_dt) %>%
+      group_by(team_name, player_name) %>%
+      summarise(gs_today = n(), .groups = "drop")
+    week_hrs <- matched %>%
+      filter(date >= today_dt - 7) %>%
+      group_by(team_name, player_name) %>%
+      summarise(gs_7d = n(), .groups = "drop")
+    month_hrs <- matched %>%
+      filter(date >= today_dt - 30) %>%
+      group_by(team_name, player_name) %>%
+      summarise(gs_30d = n(), .groups = "drop")
+    total_hrs %>%
+      left_join(today_hrs, by = c("team_name", "player_name")) %>%
+      left_join(week_hrs,  by = c("team_name", "player_name")) %>%
+      left_join(month_hrs, by = c("team_name", "player_name")) %>%
+      mutate(
+        gs_today = ifelse(is.na(gs_today), 0L, as.integer(gs_today)),
+        gs_7d    = ifelse(is.na(gs_7d),    0L, as.integer(gs_7d)),
+        gs_30d   = ifelse(is.na(gs_30d),   0L, as.integer(gs_30d))
+      )
+  })
+
   # ---- Sort mode (HR vs position) -----------------------------------------
   sort_mode <- reactiveVal("hr")
 
@@ -457,7 +522,10 @@ server <- function(input, output, session) {
           div(class = "sr-team",
             div(class = "sr-name-row",
               tags$span(class = "team-name-bold", tinfo$display_name),
-              tags$span(class = "team-abbr-inline", tinfo$abbr)
+              tags$span(class = "team-abbr-inline", tinfo$abbr),
+              if (team %in% golden_swaps$team_name)
+                tags$span(class = "gs-header-badge",
+                  title = "Golden Swap used", "GS")
             ),
             if (!is.null(squad)) tags$span(class = "team-squad-name", paste0("\u201c", squad, "\u201d"))
           )
@@ -511,6 +579,8 @@ server <- function(input, output, session) {
     }
 
     recent_p   <- recent_player_stats()
+    bench_hrs  <- bench_player_hrs()
+    gs_hrs     <- golden_swap_hrs()
     cur_sort   <- sort_mode()
 
     # Build team summary for card header stats
@@ -567,7 +637,9 @@ server <- function(input, output, session) {
           div(class = "team-color-dot",
             style = paste0("background:", tinfo$primary_color, "; margin-left:2px;")),
           tags$span(class = "team-name-bold", style = "font-size:17px;", tinfo$display_name),
-          tags$span(class = "team-abbr-mono", tinfo$abbr)
+          tags$span(class = "team-abbr-mono", tinfo$abbr),
+          if (team %in% golden_swaps$team_name)
+            tags$span(class = "gs-header-badge", title = "Golden Swap used", "GS")
         ),
         div(class = "col-divider-bar", style = "height:22px; margin: 0 6px;"),
         div(class = "ch-stats",
@@ -630,6 +702,21 @@ server <- function(input, output, session) {
         team_players <- team_players %>%
           left_join(global_pos_ranks, by = c("team_name", "player_name"))
 
+        # Join bench actual HR counts for display (bench players show real HRs
+        # visually but they don't count toward team totals)
+        if (!is.null(bench_hrs) && nrow(bench_hrs) > 0) {
+          team_players <- team_players %>%
+            left_join(bench_hrs %>% select(player_name, team_name, bench_hr),
+                      by = c("player_name", "team_name")) %>%
+            mutate(display_home_runs = ifelse(
+              position == "BENCH" & !is.na(bench_hr), bench_hr, total_home_runs
+            )) %>%
+            select(-bench_hr)
+        } else {
+          team_players <- team_players %>%
+            mutate(display_home_runs = total_home_runs)
+        }
+
         # Sort — BENCH always pinned to bottom regardless of sort mode
         if (cur_sort == "position") {
           team_players <- team_players %>%
@@ -691,6 +778,8 @@ server <- function(input, output, session) {
 
           mlb_abbr <- if ("mlb_team" %in% names(p) && !is.na(p$mlb_team)) p$mlb_team else ""
           is_bench <- !is.null(p$position) && p$position == "BENCH"
+          is_golden <- nrow(golden_swaps) > 0 &&
+            p$player_name %in% golden_swaps$player_in[golden_swaps$team_name == team]
 
           display_pos <- dplyr::case_when(
             p$position == "BENCH" ~ "BN",
@@ -711,23 +800,33 @@ server <- function(input, output, session) {
           }
 
           avg_dist_val <- if ("avg_distance" %in% names(p) && !is.na(p$avg_distance) && p$avg_distance > 0) {
-            if (team == "Derek") {
-              paste0(as.integer(round(p$avg_distance * 0.3048)), "m")
-            } else {
-              as.integer(round(p$avg_distance))
-            }
+            # Legacy: Derek's distances in meters. Uncomment block below to re-enable for any team.
+            # if (team == "Derek") {
+            #   paste0(as.integer(round(p$avg_distance * 0.3048)), "m")
+            # } else {
+            #   as.integer(round(p$avg_distance))
+            # }
+            as.integer(round(p$avg_distance))
           } else {
             tags$span(class = "em-dash", "\u2014")
           }
 
+          row_class <- if (is_bench) "bench-row" else if (is_golden) "golden-swap-active-row" else ""
+          hr_color  <- if (is_golden) "color:#92400E;" else "color:#1E293B;"
+          name_cell <- if (is_golden) {
+            tagList(tags$span(class = "gs-name-badge", "GS"), p$player_name)
+          } else {
+            p$player_name
+          }
+
           tags$tr(
-            class = if (is_bench) "bench-row" else "",
+            class = row_class,
             style = paste0("background:", row_bg_uniform, ";"),
             tags$td(style = "font-size:11px;", j),
             tags$td(pos_badge_display),
             tags$td(tags$span(class = "mlb-badge", mlb_abbr)),
-            tags$td(style = "text-align:left; font-weight:700;", p$player_name),
-            tags$td(style = "font-weight:700; font-size:15px; color:#1E293B;", p$total_home_runs),
+            tags$td(style = "text-align:left; font-weight:700;", name_cell),
+            tags$td(style = paste0("font-weight:700; font-size:15px;", hr_color), p$display_home_runs),
             tags$td(style = "width:40px;", pos_rk_pill),
             tags$td(avg_dist_val),
             tags$td(day_cell),
@@ -736,10 +835,62 @@ server <- function(input, output, session) {
           )
         })
 
+        # Golden swap row — shows the DROPPED player for comparison so you can
+        # see if the swap was worth it. The swapped-IN player gets the gold row
+        # and GS badge in their normal roster row above.
+        gs_info <- golden_swaps[golden_swaps$team_name == team, ]
+        gs_row <- if (nrow(gs_info) > 0) {
+          gs_dropped <- gs_info$player_out[1]
+          gs_hr_count <- 0L; gs_today_n <- 0L; gs_7d_n <- 0L; gs_30d_n <- 0L
+          if (!is.null(gs_hrs) && nrow(gs_hrs) > 0) {
+            gs_match <- gs_hrs[gs_hrs$team_name == team &
+                                 gs_hrs$player_name == gs_dropped, ]
+            if (nrow(gs_match) > 0) {
+              gs_hr_count <- gs_match$gs_hr[1]
+              gs_today_n  <- gs_match$gs_today[1]
+              gs_7d_n     <- gs_match$gs_7d[1]
+              gs_30d_n    <- gs_match$gs_30d[1]
+            }
+          }
+          gs_day_cell <- if (gs_today_n > 0)
+            tags$span(class = "day-pill-sm", paste0("+", gs_today_n))
+          else
+            tags$span(class = "em-dash", "\u2014")
+
+          tags$tr(
+            class = "golden-swap-row",
+            style = paste0("background:", row_bg_uniform, ";"),
+            tags$td(""),
+            tags$td(""),
+            tags$td(""),
+            tags$td(style = "text-align:left; font-weight:700;",
+              tagList(tags$span(class = "gs-name-badge", "GS"), gs_dropped)),
+            tags$td(style = "font-weight:700; font-size:15px; color:#1E293B;",
+              gs_hr_count),
+            tags$td(""),
+            tags$td(tags$span(class = "em-dash", "\u2014")),
+            tags$td(gs_day_cell),
+            tags$td(gs_7d_n),
+            tags$td(gs_30d_n)
+          )
+        } else {
+          tags$tr(
+            class = "golden-swap-none-row",
+            style = paste0("background:", row_bg_uniform, ";"),
+            tags$td(""),
+            tags$td(""),
+            tags$td(""),
+            tags$td(style = "text-align:left; color:#94A3B8; font-style:italic;",
+              tagList(tags$span(class = "gs-name-badge", "GS"), "None")),
+            tags$td(""), tags$td(""), tags$td(""),
+            tags$td(""), tags$td(""), tags$td("")
+          )
+        }
+
         div(class = "roster-table-wrapper",
           tags$table(class = "roster-table",
             tags$thead(sub_header),
-            tags$tbody(player_rows)
+            tags$tbody(player_rows, gs_row)
           )
         )
       } else {

@@ -555,6 +555,47 @@ ui <- fluidPage(
       .bench-row { border-top: 2px solid #475569; opacity: 0.45; }
       .roster-table tr:last-child td { border-bottom: none; }
 
+      /* Active golden swap row — the player who was swapped IN */
+      .golden-swap-active-row {
+        border-left: 3px solid #D97706;
+        background: rgba(251, 191, 36, 0.10) !important;
+      }
+      /* Dropped player row at bottom — greyed like bench with gold separator */
+      .golden-swap-row {
+        border-top: 2px solid #D97706;
+        opacity: 0.5;
+      }
+      .golden-swap-none-row {
+        border-top: 2px solid #D97706;
+        opacity: 0.4;
+      }
+      /* GS badge — inline name badge for the swapped-in player */
+      .gs-name-badge {
+        display: inline-block;
+        padding: 1px 5px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 700;
+        background: #FEF3C7;
+        color: #92400E;
+        margin-right: 4px;
+        vertical-align: middle;
+        line-height: 1.4;
+      }
+      /* GS badge in card header and standings */
+      .gs-header-badge {
+        display: inline-block;
+        padding: 1px 5px;
+        border-radius: 5px;
+        font-size: 10px;
+        font-weight: 700;
+        background: #FEF3C7;
+        color: #92400E;
+        margin-left: 5px;
+        vertical-align: middle;
+        line-height: 1.4;
+      }
+
       /* Position badge */
       .pos-badge {
         display: inline-block;

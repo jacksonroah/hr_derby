@@ -25,7 +25,7 @@ CONFIG <- list(
       "Jackson" = list(
         display_name  = "Jackson",
         abbr          = "JXN",
-        squad_name    = "The Muribombi's",
+        squad_name    = "The MuneTANKa's",
         primary_color = "#f20f0f",
         highlight_color = "#c43c3c",
         text_color    = "#000000",

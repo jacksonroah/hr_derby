@@ -106,6 +106,138 @@ load_roster <- function() {
 drafted_players <- load_roster()
 
 # ---------------------------------------------------------------------------
+# Load roster transaction log (player swaps).
+# File: transactions_2026.csv — columns: date, team_name, player_out, player_in
+# Returns an empty data frame if the file is missing or has no rows.
+# ---------------------------------------------------------------------------
+load_transactions <- function() {
+  tx_file <- "transactions_2026.csv"
+  empty <- data.frame(
+    date       = as.Date(character()),
+    team_name  = character(),
+    player_out = character(),
+    player_in  = character(),
+    stringsAsFactors = FALSE
+  )
+  if (!file.exists(tx_file)) return(empty)
+  tryCatch({
+    tx <- readr::read_csv(tx_file, col_types = readr::cols(
+      date       = readr::col_date(),
+      team_name  = readr::col_character(),
+      player_out = readr::col_character(),
+      player_in  = readr::col_character()
+    ))
+    tx <- tx[!is.na(tx$date) & !is.na(tx$team_name) &
+               !is.na(tx$player_out) & !is.na(tx$player_in), ]
+    if (nrow(tx) == 0) return(empty)
+    tx[order(tx$date), ]
+  }, error = function(e) {
+    warning(paste("Error loading transactions:", e$message))
+    empty
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Build player active-date ranges from roster + transactions.
+#
+# Returns a data frame with columns:
+#   player_name, team_name, start_date, end_date, is_historical
+#
+# is_historical = TRUE  -> player was dropped; HRs counted up to end_date
+# is_historical = FALSE -> player is in current roster; start_date may be >
+#                          opening_day if they were swapped in mid-season
+# ---------------------------------------------------------------------------
+build_player_date_ranges <- function(roster, transactions) {
+  opening_day <- get_opening_day()
+  far_future  <- as.Date("2099-12-31")
+
+  # Non-bench active players start from opening_day (may be overridden below)
+  ranges <- roster %>%
+    dplyr::filter(position != "BENCH") %>%
+    dplyr::select(player_name, team_name) %>%
+    dplyr::mutate(
+      start_date   = as.Date(opening_day),
+      end_date     = far_future,
+      is_historical = FALSE
+    )
+
+  if (is.null(transactions) || nrow(transactions) == 0) {
+    return(ranges)
+  }
+
+  for (i in seq_len(nrow(transactions))) {
+    tx      <- transactions[i, ]
+    tx_date <- as.Date(tx$date)
+
+    # --- Swapped-IN player: their counting window starts on the swap date ---
+    in_idx <- which(ranges$player_name == tx$player_in &
+                      ranges$team_name  == tx$team_name)
+    if (length(in_idx) > 0) {
+      ranges$start_date[in_idx] <- tx_date
+    }
+
+    # --- Swapped-OUT player: cap their window at swap_date - 1 ---
+    out_idx <- which(ranges$player_name == tx$player_out &
+                       ranges$team_name  == tx$team_name)
+    if (length(out_idx) > 0) {
+      # Already in ranges (was swapped in previously, now being swapped out)
+      ranges$end_date[out_idx]     <- tx_date - 1
+      ranges$is_historical[out_idx] <- TRUE
+    } else {
+      # Was an original roster player; add a historical row
+      ranges <- dplyr::bind_rows(ranges, data.frame(
+        player_name   = tx$player_out,
+        team_name     = tx$team_name,
+        start_date    = as.Date(opening_day),
+        end_date      = tx_date - 1,
+        is_historical = TRUE,
+        stringsAsFactors = FALSE
+      ))
+    }
+  }
+
+  return(ranges)
+}
+
+# Global transaction log and date ranges (rebuilt each time the app starts)
+roster_transactions  <- load_transactions()
+player_date_ranges   <- build_player_date_ranges(drafted_players, roster_transactions)
+
+# ---------------------------------------------------------------------------
+# Load golden swap log.
+# File: golden_swaps_2026.csv — columns: team_name, player_out, player_in, swap_date
+# Each team gets one golden swap per season. Returns empty df if unused.
+# ---------------------------------------------------------------------------
+load_golden_swaps <- function() {
+  gs_file <- "golden_swaps_2026.csv"
+  empty <- data.frame(
+    team_name  = character(),
+    player_out = character(),
+    player_in  = character(),
+    swap_date  = as.Date(character()),
+    stringsAsFactors = FALSE
+  )
+  if (!file.exists(gs_file)) return(empty)
+  tryCatch({
+    gs <- readr::read_csv(gs_file, col_types = readr::cols(
+      team_name  = readr::col_character(),
+      player_out = readr::col_character(),
+      player_in  = readr::col_character(),
+      swap_date  = readr::col_date()
+    ))
+    gs <- gs[!is.na(gs$team_name) & !is.na(gs$player_in), ]
+    if (nrow(gs) == 0) return(empty)
+    gs
+  }, error = function(e) {
+    warning(paste("Error loading golden swaps:", e$message))
+    empty
+  })
+}
+
+# Global golden swap record
+golden_swaps <- load_golden_swaps()
+
+# ---------------------------------------------------------------------------
 # Process raw API data
 # ---------------------------------------------------------------------------
 process_data <- function(raw_data, roster) {
@@ -370,6 +502,31 @@ prepare_cumulative_data <- function(data) {
 
   if (is.null(data) || nrow(data) == 0) {
     return(zero_anchor)
+  }
+
+  # ---- Graph-only roster-swap continuity ------------------------------------
+  # For players who were swapped IN mid-season, remap all of their HR event
+  # dates that fall BEFORE their join date to the join date itself.
+  # This creates a visible "jump" on the graph at the swap date rather than
+  # retroactively altering the team's historical line.
+  # This remapping only affects the graph; HR counts/roster totals are unchanged.
+  if (exists("player_date_ranges") &&
+      !is.null(player_date_ranges) &&
+      nrow(player_date_ranges) > 0) {
+    late_starters <- player_date_ranges %>%
+      dplyr::filter(!is_historical, start_date > as.Date(opening_day)) %>%
+      dplyr::select(player_name, team_name, start_date)
+
+    if (nrow(late_starters) > 0) {
+      data <- data %>%
+        dplyr::mutate(date = as.Date(date)) %>%
+        dplyr::left_join(late_starters, by = c("player_name", "team_name")) %>%
+        dplyr::mutate(
+          date = dplyr::if_else(!is.na(start_date) & date < start_date,
+                                start_date, date)
+        ) %>%
+        dplyr::select(-start_date)
+    }
   }
 
   daily_counts <- data %>%
