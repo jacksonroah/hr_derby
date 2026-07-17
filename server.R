@@ -1157,10 +1157,33 @@ server <- function(input, output, session) {
     latest <- jittered %>%
       group_by(team_name) %>% filter(date == max(date)) %>% slice(1) %>% ungroup()
 
-    ggplot(jittered, aes(x = date, y = y, color = team_name)) +
+    # Golden swap markers: dashed vline + "GS" tag in team color on the swap date.
+    # Same-date swaps stack their GS tags downward from the top of the plot.
+    gs_marks <- golden_swaps %>%
+      filter(!is.na(swap_date)) %>%
+      mutate(swap_date = as.Date(swap_date)) %>%
+      group_by(swap_date) %>%
+      mutate(label_y = max(jittered$y) * (1 - 0.055 * (row_number() - 1))) %>%
+      ungroup()
+
+    p <- ggplot(jittered, aes(x = date, y = y, color = team_name)) +
       geom_line(linewidth = 1.5) +
       geom_text(data = latest, aes(label = team_label),
-                hjust = -0.15, size = 2.8, show.legend = FALSE) +
+                hjust = -0.15, size = 2.8, show.legend = FALSE)
+
+    if (nrow(gs_marks) > 0) {
+      p <- p +
+        geom_vline(data = gs_marks,
+                   aes(xintercept = swap_date, color = team_name),
+                   linetype = "dashed", linewidth = 0.4, alpha = 0.55,
+                   show.legend = FALSE) +
+        geom_text(data = gs_marks,
+                  aes(x = swap_date, y = label_y, color = team_name),
+                  label = "GS", size = 2.4, fontface = "bold",
+                  hjust = -0.25, show.legend = FALSE)
+    }
+
+    p +
       labs(x = "Date", y = "Total HRs",
            caption = "Lines slightly offset — all values are whole numbers") +
       scale_color_manual(values = g$team_colors) +
