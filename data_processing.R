@@ -21,10 +21,11 @@ get_today_pst <- function() {
 }
 
 # ---------------------------------------------------------------------------
-# Name normalization
+# Name normalization — vectorized; accepts a character vector or scalar
 # ---------------------------------------------------------------------------
 normalize_name <- function(name) {
-  if (is.null(name) || is.na(name) || name == "") return("")
+  if (is.null(name) || length(name) == 0) return("")
+  name[is.na(name)] <- ""
   name <- tolower(name)
   name <- gsub("\u00e1", "a", name); name <- gsub("\u00e9", "e", name)
   name <- gsub("\u00ed", "i", name); name <- gsub("\u00f3", "o", name)
@@ -169,16 +170,19 @@ build_player_date_ranges <- function(roster, transactions) {
     tx      <- transactions[i, ]
     tx_date <- as.Date(tx$date)
 
+    # Match by normalized name so "Jr."/accent variants in the CSVs never miss
+    norm_names <- normalize_name(ranges$player_name)
+
     # --- Swapped-IN player: their counting window starts on the swap date ---
-    in_idx <- which(ranges$player_name == tx$player_in &
-                      ranges$team_name  == tx$team_name)
+    in_idx <- which(norm_names == normalize_name(tx$player_in) &
+                      ranges$team_name == tx$team_name)
     if (length(in_idx) > 0) {
       ranges$start_date[in_idx] <- tx_date
     }
 
     # --- Swapped-OUT player: cap their window at swap_date - 1 ---
-    out_idx <- which(ranges$player_name == tx$player_out &
-                       ranges$team_name  == tx$team_name)
+    out_idx <- which(norm_names == normalize_name(tx$player_out) &
+                       ranges$team_name == tx$team_name)
     if (length(out_idx) > 0) {
       # Already in ranges (was swapped in previously, now being swapped out)
       ranges$end_date[out_idx]     <- tx_date - 1
@@ -269,8 +273,8 @@ process_data <- function(raw_data, roster) {
     if ("hit_speed"    %in% colnames(raw_data)) data$hit_speed    <- raw_data$hit_speed
     if ("venue"        %in% colnames(raw_data)) data$venue        <- raw_data$venue
 
-    data$normalized_name   <- sapply(data$player_name, normalize_name)
-    roster$normalized_name <- sapply(roster$player_name, normalize_name)
+    data$normalized_name   <- normalize_name(data$player_name)
+    roster$normalized_name <- normalize_name(roster$player_name)
 
     joined_data <- data %>%
       inner_join(roster, by = "normalized_name") %>%
@@ -488,7 +492,7 @@ calculate_player_recent_stats <- function(data) {
 # All teams anchored to 0 on the day before opening day so the graph
 # always starts at zero rather than the first HR date.
 # ---------------------------------------------------------------------------
-prepare_cumulative_data <- function(data) {
+prepare_cumulative_data <- function(data, raw_data = NULL) {
   opening_day <- get_opening_day()
   all_teams   <- get_team_names()
 
@@ -500,33 +504,72 @@ prepare_cumulative_data <- function(data) {
     stringsAsFactors = FALSE
   )
 
-  if (is.null(data) || nrow(data) == 0) {
-    return(zero_anchor)
+  # ---- Standings replay ------------------------------------------------------
+  # Graph value on date D = the standings as they stood on date D: every player
+  # on the team's active roster on D contributes ALL their HRs through D.
+  # A promoted bench player's full total jumps IN on the swap date; a dropped
+  # player's accumulated total falls OUT on the swap date. The end of each line
+  # therefore always equals the current standings.
+  if (!is.null(raw_data) && nrow(raw_data) > 0 &&
+      "batter_name" %in% names(raw_data) &&
+      exists("player_date_ranges") && !is.null(player_date_ranges) &&
+      nrow(player_date_ranges) > 0) {
+
+    raw <- raw_data
+    if ("batter" %in% colnames(raw)) {
+      raw <- raw %>% filter(!(batter_name == "Max Muncy" & batter == "691777"))
+    }
+
+    ranges <- player_date_ranges %>%
+      mutate(normalized_name = normalize_name(player_name))
+
+    hrs <- data.frame(
+      normalized_name = normalize_name(raw$batter_name),
+      date            = as.Date(raw$date),
+      stringsAsFactors = FALSE
+    ) %>%
+      filter(date >= opening_day) %>%
+      inner_join(
+        ranges %>% select(normalized_name, team_name,
+                          start_date, end_date, is_historical),
+        by = "normalized_name",
+        # a player can hold windows on two teams (dropped by one, picked up
+        # by another), and each of their HRs joins to every such window
+        relationship = "many-to-many"
+      ) %>%
+      filter(date <= end_date)
+
+    # +1 once the player is on the active roster AND the HR has happened;
+    # -1 the day after they leave the roster (their total drops out)
+    deltas <- bind_rows(
+      hrs %>% transmute(team_name, date = pmax(date, start_date), delta = 1L),
+      hrs %>% filter(is_historical) %>%
+        transmute(team_name, date = end_date + 1, delta = -1L)
+    ) %>%
+      group_by(team_name, date) %>%
+      summarise(delta = sum(delta), .groups = "drop")
+
+    today_pst <- get_today_pst()
+    max_date  <- max(c(deltas$date, today_pst, opening_day))
+    all_dates <- seq(opening_day - 1, max_date, by = "day")
+    full_grid <- expand.grid(team_name = all_teams, date = all_dates,
+                             stringsAsFactors = FALSE)
+    full_grid$date <- as.Date(full_grid$date)
+
+    cumulative_data <- full_grid %>%
+      left_join(deltas, by = c("team_name", "date")) %>%
+      arrange(team_name, date) %>%
+      group_by(team_name) %>%
+      mutate(cumulative_hr = cumsum(ifelse(is.na(delta), 0L, delta))) %>%
+      ungroup() %>%
+      select(team_name, date, cumulative_hr)
+
+    return(cumulative_data)
   }
 
-  # ---- Graph-only roster-swap continuity ------------------------------------
-  # For players who were swapped IN mid-season, remap all of their HR event
-  # dates that fall BEFORE their join date to the join date itself.
-  # This creates a visible "jump" on the graph at the swap date rather than
-  # retroactively altering the team's historical line.
-  # This remapping only affects the graph; HR counts/roster totals are unchanged.
-  if (exists("player_date_ranges") &&
-      !is.null(player_date_ranges) &&
-      nrow(player_date_ranges) > 0) {
-    late_starters <- player_date_ranges %>%
-      dplyr::filter(!is_historical, start_date > as.Date(opening_day)) %>%
-      dplyr::select(player_name, team_name, start_date)
-
-    if (nrow(late_starters) > 0) {
-      data <- data %>%
-        dplyr::mutate(date = as.Date(date)) %>%
-        dplyr::left_join(late_starters, by = c("player_name", "team_name")) %>%
-        dplyr::mutate(
-          date = dplyr::if_else(!is.na(start_date) & date < start_date,
-                                start_date, date)
-        ) %>%
-        dplyr::select(-start_date)
-    }
+  # ---- Fallback: simple cumulative of processed data (no raw/ranges) --------
+  if (is.null(data) || nrow(data) == 0) {
+    return(zero_anchor)
   }
 
   daily_counts <- data %>%
