@@ -1,8 +1,8 @@
 player_name,team_name,position,mlb_team
 Pete Alonso,Jackson,1B,BAL
 Ketel Marte,Jackson,2B,ARI
-Brent Rooker,Jackson,OF,SAC
-Fernando Tatis,Jackson,BENCH,SDP
+Brent Rooker,Jackson,BENCH,SAC
+Andy Pages,Jackson,OF,LAD
 Munetaka Murakami,Jackson,3B,CHW
 Spencer Torkelson,Jackson,UTL,DET
 Hunter Goodman,Jackson,C,COL
@@ -14,34 +14,34 @@ Zach Neto,Alex,SS,LAA
 Ronald Acuna Jr.,Alex,OF,ATL
 Austin Riley,Alex,UTL,ATL
 James Wood,Alex,OF,WSH
-Riley Greene,Alex,OF,DET
+Jackson Chourio,Alex,OF,MIL
 Brice Turang,Alex,2B,MIL
 Tyler Soderstrom,Alex,1B,SAC
 Wyatt Langford,Alex,BENCH,TEX
-Logan O'Hoppe,Alex,C,LAA
+Dillon Dingler,Alex,C,DET
 Junior Caminero,Alex,3B,TBR
 
 Gunnar Henderson,Brusick,SS,BAL
-Roman Anthony,Brusick,OF,BOS
-Yordan Alvarez,Brusick,UTL,HOU
+Roman Anthony,Brusick,BENCH,BOS
+Yordan Alvarez,Brusick,OF,HOU
 Oneil Cruz,Brusick,OF,PIT
 Shea Langeliers,Brusick,C,OAK
 Teoscar Hernandez,Brusick,OF,LAD
 Freddie Freeman,Brusick,1B,LAD
 Marcus Semien,Brusick,2B,TEX
 Jose Ramirez,Brusick,3B,CLE
-Colson Montgomery,Brusick,BENCH,CHW
+Colson Montgomery,Brusick,UTL,CHW
 
 Shohei Ohtani,Jason,UTL,LAD
 Julio Rodriguez,Jason,OF,SEA
-Francisco Lindor,Jason,SS,NYM
+Francisco Lindor,Jason,BENCH,NYM
 Jordan Walker,Jason,OF,STL
 Bryce Harper,Jason,1B,PHI
 Corbin Carroll,Jason,OF,ARI
 William Contreras,Jason,C,MIL
 Maikel Garcia,Jason,3B,KCR
 Nico Hoerner,Jason,2B,CHC
-Trea Turner,Jason,BENCH,PHI
+Trea Turner,Jason,SS,PHI
 
 Nick Kurtz,Kirk,1B,SAC
 Jazz Chisholm,Kirk,2B,NYY
@@ -49,7 +49,7 @@ Dansby Swanson,Kirk,SS,CHC
 Jo Adell,Kirk,OF,LAA
 Ben Rice,Kirk,C,NYY
 Alex Bregman,Kirk,3B,BOS
-Taylor Ward,Kirk,OF,LAA
+Michael Harris II,Kirk,OF,ATL
 Randy Arozarena,Kirk,OF,SEA
 Christian Walker,Kirk,BENCH,HOU
 Kyle Schwarber,Kirk,UTL,PHI
@@ -61,26 +61,26 @@ Pete Crow-Armstrong,Tyler,OF,CHC
 Max Muncy,Tyler,3B,LAD
 Will Smith,Tyler,C,LAD
 Josh Naylor,Tyler,UTL,SEA
-Jackson Holliday,Tyler,2B,BAL
+Luis Garcia Jr,Tyler,2B,WSN
 Bo Bichette,Tyler,BENCH,NYM
 Juan Soto,Tyler,OF,NYM
 
 Cal Raleigh,Derek,C,SEA
 Corey Seager,Derek,SS,TEX
 Vinnie Pasquantino,Derek,1B,KCR
-Eugenio Suarez,Derek,3B,CIN
-Giancarlo Stanton,Derek,OF,NYY
+Miguel Vargas,Derek,3B,CHW
+Giancarlo Stanton,Derek,BENCH,NYY
 Jose Altuve,Derek,2B,HOU
 Mike Trout,Derek,OF,LAA
 Adolis Garcia,Derek,OF,PHI
 Christian Yelich,Derek,UTL,MIL
-George Springer,Derek,BENCH,TOR
+George Springer,Derek,OF,TOR
 
 Aaron Judge,Maddox,OF,NYY
 Elly De La Cruz,Maddox,SS,CIN
-Mookie Betts,Maddox,UTL,LAD
-Vladimir Guerrero Jr.,Maddox,1B,TOR
-Rafael Devers,Maddox,BENCH,SFG
+Mookie Betts,Maddox,BENCH,LAD
+Kazuma Okamoto,Maddox,UTL,TOR
+Rafael Devers,Maddox,1B,SFG
 Manny Machado,Maddox,3B,SDP
 Byron Buxton,Maddox,OF,MIN
 Salvador Perez,Maddox,C,KCR
