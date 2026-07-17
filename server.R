@@ -949,18 +949,18 @@ server <- function(input, output, session) {
     }
 
     cur_view  <- pos_view_mode()
-    positions <- c("OF", "1B", "2B", "3B", "SS", "C")
+    positions <- c("OF", "1B", "2B", "3B", "SS", "C", "UTL")
 
     # Typography scale for ranks 1–8: size + weight + darkness (no background color)
     rank_type <- list(
-      list(size="20px", weight="800", color="#0F172A"),
-      list(size="18px", weight="700", color="#1E293B"),
-      list(size="17px", weight="700", color="#334155"),
-      list(size="15px", weight="600", color="#475569"),
-      list(size="14px", weight="500", color="#64748B"),
-      list(size="13px", weight="500", color="#94A3B8"),
-      list(size="12px", weight="400", color="#CBD5E1"),
-      list(size="12px", weight="400", color="#E2E8F0")
+      list(size="22px", weight="800", color="#0F172A"),
+      list(size="20px", weight="700", color="#1E293B"),
+      list(size="19px", weight="700", color="#334155"),
+      list(size="17px", weight="600", color="#475569"),
+      list(size="16px", weight="500", color="#64748B"),
+      list(size="15px", weight="500", color="#94A3B8"),
+      list(size="14px", weight="400", color="#CBD5E1"),
+      list(size="14px", weight="400", color="#E2E8F0")
     )
 
     # Per-team HR totals and rank within each position
