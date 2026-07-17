@@ -65,15 +65,34 @@ build_graph_base <- function(cum, lb_result) {
 
 server <- function(input, output, session) {
 
+  # Auto-reconnect to the same session when the websocket drops (phone
+  # backgrounding, flaky wifi) instead of showing the grey "reload" screen.
+  session$allowReconnect(TRUE)
+
   status        <- reactiveVal("Initializing...")
-  # Load from disk cache so standings display immediately on reload
-  hr_data       <- reactiveVal(if (file.exists(CACHE_HR_FILE))  readRDS(CACHE_HR_FILE)  else NULL)
+  # Load from disk cache so standings display immediately on reload.
+  # Reprocess the raw cache against the CURRENT roster — the processed cache
+  # (hr_data.rds) may have been written under an older roster and would
+  # double-count players who have since moved to/from the bench.
+  hr_data       <- reactiveVal(
+    if (file.exists(CACHE_RAW_FILE)) process_data(readRDS(CACHE_RAW_FILE), drafted_players)
+    else if (file.exists(CACHE_HR_FILE)) readRDS(CACHE_HR_FILE)
+    else NULL
+  )
   total_api_hrs <- reactiveVal(if (file.exists(CACHE_API_FILE)) readRDS(CACHE_API_FILE) else 0L)
   raw_api_data  <- reactiveVal(if (file.exists(CACHE_RAW_FILE)) readRDS(CACHE_RAW_FILE) else NULL)
 
   # ---- API polling --------------------------------------------------------
   # Single GET per cycle; on error keeps old hr_data so UI never blanks out.
+  # The first run is deferred so the initial page paint comes straight from
+  # cache instead of waiting on the (blocking) season-long API download.
+  first_fetch_deferred <- FALSE
   observe({
+    if (!first_fetch_deferred) {
+      first_fetch_deferred <<- TRUE
+      invalidateLater(250, session)
+      return()
+    }
     invalidateLater(get_poll_interval(), session)
     tryCatch({
       raw_response <- httr::GET(get_api_url())
@@ -85,7 +104,7 @@ server <- function(input, output, session) {
 
       raw_content <- httr::content(raw_response, "text", encoding = "UTF-8")
       data        <- jsonlite::fromJSON(raw_content)
-      if (is.data.frame(data)) {
+      if (is.data.frame(data) && !identical(data, raw_api_data())) {
         raw_api_data(data)
         tryCatch(saveRDS(data, CACHE_RAW_FILE),
                  error = function(e) warning("Raw cache write failed: ", e$message))
@@ -93,16 +112,21 @@ server <- function(input, output, session) {
       processed   <- process_data(data, drafted_players)
 
       if (!is.null(processed) && nrow(processed) > 0) {
-        hr_data(processed)
+        # Skip the reactive update (and every downstream re-render) when
+        # nothing changed — keeps polling cheap, especially on mobile.
+        if (!identical(processed, hr_data())) hr_data(processed)
         # Track total MLB HR count from raw API response (for % calculation)
         api_count <- if (is.data.frame(data)) nrow(data) else 0L
-        total_api_hrs(api_count)
-        # Persist to disk cache so next app start is instant
-        tryCatch({
-          saveRDS(processed, CACHE_HR_FILE)
-          saveRDS(api_count, CACHE_API_FILE)
-        }, error = function(e) warning("Cache write failed: ", e$message))
-        status(paste("Updated —", nrow(processed), "HR records"))
+        if (!identical(api_count, total_api_hrs())) {
+          total_api_hrs(api_count)
+          # Persist to disk cache so next app start is instant
+          tryCatch({
+            saveRDS(processed, CACHE_HR_FILE)
+            saveRDS(api_count, CACHE_API_FILE)
+          }, error = function(e) warning("Cache write failed: ", e$message))
+        }
+        new_status <- paste("Updated —", nrow(processed), "HR records")
+        if (!identical(new_status, status())) status(new_status)
       } else {
         status("No matching players found in API data.")
       }
@@ -133,7 +157,7 @@ server <- function(input, output, session) {
   })
 
   cumulative_hr_data <- reactive({
-    prepare_cumulative_data(hr_data())
+    prepare_cumulative_data(hr_data(), raw_api_data())
   })
 
   # Bench player HR counts for display-only (not counted toward team totals).
